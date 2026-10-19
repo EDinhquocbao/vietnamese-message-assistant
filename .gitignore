@@ -1,0 +1,44 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.egg-info/
+
+# Virtual environment
+.venv/
+venv/
+env/
+
+# Environment variables
+.env
+.env.*
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Data
+data/raw/*
+data/processed/*
+data/test/*
+!data/raw/.gitkeep
+!data/processed/.gitkeep
+!data/test/.gitkeep
+
+# Model checkpoints
+models/*
+!models/correction/.gitkeep
+!models/paraphrase/.gitkeep
+
+# Outputs
+outputs/*
+!outputs/metrics/.gitkeep
+!outputs/predictions/.gitkeep
+!outputs/error_analysis/.gitkeep
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
