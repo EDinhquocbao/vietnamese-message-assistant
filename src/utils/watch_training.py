@@ -1,10 +1,12 @@
 """Màn hình theo dõi tiến độ huấn luyện, tự làm mới.
 
-Đọc thanh tiến độ trong file log và loss trong checkpoints/*/trainer_state.json (lưu mỗi eval_steps).
+Đọc thanh tiến độ và loss trong file log (cần chạy train với PYTHONUNBUFFERED=1 để log có loss ngay);
+nếu log không có loss thì lấy từ checkpoints/*/trainer_state.json (lưu mỗi eval_steps).
 Chạy:  python -m src.utils.watch_training --log outputs/logs/train_correction_vit5-base.log \
            --run_dir models/correction/vit5-base
 """
 import argparse
+import ast
 import json
 import os
 import re
@@ -24,6 +26,23 @@ def last_progress(log: Path):
     total = max(int(m[2]) for m in matches)
     train = [m for m in matches if int(m[2]) == total]
     return train[-1]
+
+
+def history_from_log(log: Path) -> list[dict]:
+    """Các dòng {'loss': ...} / {'eval_loss': ...} mà Trainer in ra log; giá trị được đổi sang float."""
+    out = []
+    for line in log.read_text(encoding="utf-8", errors="replace").replace("\r", "\n").splitlines():
+        line = line.strip()
+        if line.startswith(("{'loss'", "{'eval_loss'")):
+            try:
+                out.append({k: float(v) for k, v in ast.literal_eval(line).items()})
+            except (ValueError, SyntaxError):
+                pass
+    return out
+
+
+def _step(h: dict) -> str:
+    return f"bước {int(h['step']):>5}  " if "step" in h else ""
 
 
 def latest_state(run_dir: Path) -> dict | None:
@@ -59,21 +78,24 @@ def render(log: Path, run_dir: Path) -> str:
 
     state = latest_state(run_dir)
     history = (state or {}).get("log_history", [])
+    from_log = history_from_log(log) if log.exists() else []
+    if len(from_log) > len(history):
+        history = from_log
     train = [h for h in history if "loss" in h]
     evals = [h for h in history if "eval_loss" in h]
     if state and state.get("done"):
         lines += ["*** ĐÃ XONG ***", f"Val loss tốt nhất: {state['best_val']['eval_loss']:.4f}  ({state['minutes']} phút)", ""]
     if train:
         lines += ["Train loss (mỗi 100 bước, 8 lần gần nhất):"]
-        lines += [f"  bước {h['step']:>5}  epoch {h['epoch']:.2f}  loss {float(h['loss']):.4f}  lr {float(h['learning_rate']):.2e}"
+        lines += [f"  {_step(h)}epoch {h['epoch']:.2f}  loss {float(h['loss']):.4f}  lr {float(h['learning_rate']):.2e}"
                   for h in train[-8:]]
     else:
-        lines += ["Train loss: sẽ có sau checkpoint đầu tiên (mỗi 1000 bước)."]
+        lines += ["Train loss: chưa có (log in mỗi 100 bước, hoặc sau checkpoint đầu tiên)."]
     lines += [""]
     if evals:
         best = min(float(h["eval_loss"]) for h in evals)
         lines += ["Val loss:"]
-        lines += [f"  bước {h['step']:>5}  {float(h['eval_loss']):.4f}{'  <- tốt nhất' if float(h['eval_loss']) == best else ''}"
+        lines += [f"  {_step(h)}epoch {h['epoch']:.2f}  {float(h['eval_loss']):.4f}{'  <- tốt nhất' if float(h['eval_loss']) == best else ''}"
                   for h in evals]
     lines += ["", f"Log: {log}", "Ctrl+C để đóng (không ảnh hưởng việc huấn luyện)."]
     return "\n".join(lines)
