@@ -22,7 +22,7 @@ def main():
     ap.add_argument("--data", default="data/processed/visp/val.jsonl")
     ap.add_argument("--config", default="configs/pipeline.yaml")
     ap.add_argument("--n", type=int, default=1000)
-    ap.add_argument("--keep", type=float, default=10, help="phân vị dùng làm ngưỡng (%)")
+    ap.add_argument("--keep", type=float, default=10, help="phân vị dùng làm ngưỡng (%%)")
     args = ap.parse_args()
 
     nli_model = load_config(args.config)["ranker"]["nli_model"]

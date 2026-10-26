@@ -1,0 +1,33 @@
+# Fine-tune GIAI ĐOẠN 2 (docs/improvement_plan.md): v2 (lỗi nhân tạo + thật) sửa hăng cả từ đúng trên
+# ViLexNorm (hường -> hưởng); fine-tune tiếp 1 epoch CHỈ trên dữ liệu thật để kéo về nhãn người.
+seed: 42
+
+model_name: models/correction/vit5-base-aug   # khởi tạo từ mô hình giai đoạn 1
+output_dir: models/correction/vit5-base-aug-ft
+
+data:
+  train: data/processed/correction/train.jsonl   # CHỈ dữ liệu thật (VSEC + ViLexNorm + VEC)
+  val: data/processed/correction/val.jsonl
+  max_train_samples: null   # đặt số nhỏ (vd 2000) để chạy thử
+  max_val_samples: 2000     # val loss tính trên tập con cho nhanh
+  max_source_len: 128       # p99 độ dài token ~97 (nguồn), ~77 (đích); câu dài hơn bị bỏ khỏi train
+  max_target_len: 128
+
+train:
+  epochs: 1
+  batch_size: 16
+  grad_accum: 2             # batch hiệu dụng 32
+  optim: adafactor          # trạng thái tối ưu nhỏ hơn AdamW nhiều, hợp với T5 và 6 GB VRAM
+  learning_rate: 1.0e-4     # nhỏ hơn giai đoạn 1 để không quên các kiểu lỗi gõ đã học
+  warmup_ratio: 0.03
+  weight_decay: 0.0
+  bf16: true                # RTX 3050 (Ampere) hỗ trợ bf16; T5 dễ tràn số với fp16
+  gradient_checkpointing: true
+  eval_steps: 500
+  logging_steps: 100
+  save_total_limit: 2
+
+generate:
+  num_beams: 4
+  batch_size: 32
+  max_new_tokens: 160
