@@ -74,3 +74,11 @@ split:
   train: 0.8
   val: 0.1
   test: 0.1
+
+# Lỗi nhân tạo (src/data/augment_errors.py) -> data/processed/correction/train_aug.jsonl. Chỉ thêm vào train.
+# Bù cho kiểu lỗi gõ phím/sai dấu mà dữ liệu thật thiếu (cùng->cùn, nhau->nahu, quên->quyên).
+augment:
+  from_datasets: [vilexnorm, vec]   # câu chuẩn kiểu tin nhắn/bình luận
+  n_samples: 30000
+  min_words: 3
+  max_errors: 2                     # số từ bị gây lỗi mỗi câu: 1..max_errors

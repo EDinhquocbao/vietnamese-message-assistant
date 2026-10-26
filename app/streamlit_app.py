@@ -3,7 +3,9 @@
 Chạy từ thư mục gốc repo:  .venv/Scripts/streamlit.exe run app/streamlit_app.py
 """
 import html
+import json
 import sys
+import time
 from pathlib import Path
 
 import streamlit as st
@@ -19,6 +21,8 @@ EXAMPLES = [
     "Do vì trời mưa to cho nên mình không đi được",
     "Anh ơi cho em hỏi cái deadline của bài tập lớn là khi nào vậy anh",
 ]
+
+HISTORY = Path("outputs/logs/demo_history.jsonl")  # lưu mỗi lần xử lý để phân tích lỗi sau
 
 st.set_page_config(page_title="Trợ lý tin nhắn tiếng Việt", page_icon="✍️")
 
@@ -50,6 +54,11 @@ if st.button("Xử lý", type="primary", disabled=not text.strip()):
         st.stop()
     with st.spinner("Đang xử lý..."):
         r = assistant.run(text)
+    HISTORY.parent.mkdir(parents=True, exist_ok=True)
+    with HISTORY.open("a", encoding="utf-8") as f:
+        f.write(json.dumps({"time": time.strftime("%Y-%m-%d %H:%M:%S"), "input": r["input"],
+                            "corrected": r["corrected"], "suggestions": [s["text"] for s in r["suggestions"]]},
+                           ensure_ascii=False) + "\n")
 
     st.subheader("1. Câu đã sửa")
     st.success(r["corrected"])
