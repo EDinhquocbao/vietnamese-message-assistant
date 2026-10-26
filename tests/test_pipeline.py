@@ -104,3 +104,42 @@ def test_assistant_hides_suggestions_when_correction_has_oov():
     a = Assistant(lambda xs: list(xs), FakePara(), Ranker(encode=_fake_encode), vocab={"tí", "nữa", "nhé"})
     r = a.run("tí nữa nahu nhé")
     assert r["unknown_words"] == ["nahu"] and r["suggestions"] == []
+
+
+def test_uncertain_words_lists_alternatives():
+    from src.pipeline.assistant import uncertain_words
+
+    alts = [{"text": "ngày mai khi nào học anh", "prob": 0.6},
+            {"text": "người yêu mai khi nào học anh", "prob": 0.3},
+            {"text": "ngày mai khi nào học à", "prob": 0.05}]  # dưới ngưỡng -> bỏ
+    assert uncertain_words(alts, min_prob=0.1) == [{"span": "ngày", "options": ["người yêu"]}]
+    assert uncertain_words(alts[:1]) == []
+
+
+def test_assistant_uses_nbest_when_available():
+    from src.pipeline.assistant import Assistant
+
+    class NBestCorrector:
+        def nbest(self, texts):
+            return [[{"text": "ngày mai đi học", "prob": 0.7}, {"text": "người yêu mai đi học", "prob": 0.3}]
+                    for _ in texts]
+
+    class FakePara:
+        def candidates(self, texts):
+            return [[] for _ in texts]
+
+    r = Assistant(NBestCorrector(), FakePara(), Ranker(encode=_fake_encode)).run("ngy mai di hoc")
+    assert r["corrected"] == "ngày mai đi học"
+    assert r["uncertain"] == [{"span": "ngày", "options": ["người yêu"]}]
+
+
+def test_ranker_nli_rejects_non_entailing_candidates():
+    def fake_entail(premises, hypotheses):  # "không nên" mâu thuẫn với "đừng quên"
+        return [0.05 if ("Không nên" in p or "Không nên" in h) else 0.95 for p, h in zip(premises, hypotheses)]
+
+    r = Ranker(encode=_fake_encode, entail=fake_entail, min_entailment=0.5, top_k=3)
+    rows = r.score_all("Đừng quên mua sữa cho bé nhé", ["Đừng quên mua sữa cho con nha", "Không nên mua sữa cho bé nhé"])
+    by_text = {x["text"]: x for x in rows}
+    assert by_text["Đừng quên mua sữa cho con nha"]["rejected"] is None
+    assert by_text["Không nên mua sữa cho bé nhé"]["rejected"].startswith("không suy ra nhau")
+    assert by_text["Đừng quên mua sữa cho con nha"]["entailment"] == 0.95

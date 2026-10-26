@@ -40,3 +40,13 @@ def test_stress_inputs_are_reproducible_and_noisy(tmp_path):
     assert (noisy.input != noisy.target).all()
     s = score(a.assign(pred=a.target))
     assert all(v["exact_match"] == 1.0 and v["wer"] == 0.0 for v in s.values())
+
+
+def test_merge_nbest_normalizes_and_merges():
+    import math
+
+    from src.correction.predict import merge_nbest
+
+    r = merge_nbest([("a", math.log(0.5)), ("b", math.log(0.25)), ("a", math.log(0.25))])
+    assert [x["text"] for x in r] == ["a", "b"]
+    assert abs(r[0]["prob"] - 0.75) < 1e-9 and abs(sum(x["prob"] for x in r) - 1) < 1e-9

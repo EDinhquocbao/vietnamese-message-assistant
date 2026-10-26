@@ -42,16 +42,38 @@ def unknown_words(text: str, vocab: set[str]) -> list[str]:
     return [t for t in tokenize(text) if t.isalpha() and t.islower() and t not in vocab]
 
 
+def uncertain_words(alternatives: list[dict], min_prob: float = 0.1) -> list[dict]:
+    """Từ của phương án tốt nhất mà một phương án khác (xác suất >= min_prob) sửa khác đi.
+    Vd ["ngày mai...", "người yêu mai..."] -> [{"span": "ngày", "options": ["người yêu"]}]."""
+    best = alternatives[0]["text"]
+    tokens = tokenize(best)
+    found: dict[str, list[str]] = {}
+    for alt in alternatives[1:]:
+        if alt["prob"] < min_prob:
+            continue
+        for i1, i2, rep in sorted(word_edits(best, alt["text"])):
+            if i1 == i2:  # phương án khác chỉ chèn thêm từ, không có từ nào của câu tốt nhất để gạch chân
+                continue
+            opts = found.setdefault(" ".join(tokens[i1:i2]), [])
+            if (o := " ".join(rep)) not in opts:
+                opts.append(o)
+    return [{"span": s, "options": o} for s, o in found.items()]
+
+
 class Assistant:
     def __init__(self, corrector, paraphraser, ranker: Ranker, vocab: set[str] | None = None):
         self.corrector, self.paraphraser, self.ranker = corrector, paraphraser, ranker
         self.vocab = vocab
 
     def run_batch(self, texts: list[str]) -> list[dict]:
-        corrected = self.corrector(texts)
+        if hasattr(self.corrector, "nbest"):
+            alternatives = self.corrector.nbest(texts)
+        else:  # bộ sửa lỗi chỉ trả một câu (baseline, mô hình giả trong test)
+            alternatives = [[{"text": c, "prob": 1.0}] for c in self.corrector(texts)]
+        corrected = [a[0]["text"] for a in alternatives]
         all_cands = self.paraphraser.candidates(corrected)
         out = []
-        for src, cor, cands in zip(texts, corrected, all_cands):
+        for src, cor, cands, alts in zip(texts, corrected, all_cands, alternatives):
             rows = self.ranker.score_all(cor, cands)
             unknown = unknown_words(cor, self.vocab) if self.vocab else []
             out.append({
@@ -59,6 +81,8 @@ class Assistant:
                 "corrected": cor,
                 "edits": describe_edits(src, cor),
                 "unknown_words": unknown,  # từ nghi còn lỗi sau khi sửa
+                "alternatives": alts,      # các phương án sửa (N-best) kèm xác suất
+                "uncertain": uncertain_words(alts),
                 "suggestions": [] if unknown else self.ranker.select(rows),
                 "candidates": rows,  # mọi ứng viên kèm lý do bị loại, để xem từng bước
             })

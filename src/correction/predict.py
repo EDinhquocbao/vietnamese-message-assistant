@@ -10,6 +10,7 @@ Dùng như hàm cho src.correction.evaluate:
 Chạy:  python -m src.correction.predict --model models/correction/vit5-base "Mai mình đi hộp lúc 8h nhé"
 """
 import argparse
+import math
 import sys
 from pathlib import Path
 
@@ -42,8 +43,9 @@ class Corrector:
         return [text[a:b].strip() for i, (a, b) in zip(ids, offsets) if i == self.tok.unk_token_id]
 
     @torch.no_grad()
-    def generate_many(self, texts: list[str], n: int = 1, **gen_kwargs) -> list[list[str]]:
-        """Sinh `n` câu cho mỗi câu đầu vào (gen_kwargs truyền thẳng cho model.generate)."""
+    def generate_many(self, texts: list[str], n: int = 1, with_scores: bool = False, **gen_kwargs) -> list[list]:
+        """Sinh `n` câu cho mỗi câu đầu vào (gen_kwargs truyền thẳng cho model.generate).
+        with_scores=True (chỉ với beam search): mỗi phần tử là (câu, log-prob trung bình theo token)."""
         texts = [normalize_text(t) for t in texts]
         order = sorted(range(len(texts)), key=lambda i: len(texts[i]))  # gom câu cùng độ dài, ít padding
         out = [[] for _ in texts]
@@ -53,17 +55,35 @@ class Corrector:
             enc = self.tok(batch, return_offsets_mapping=True, padding=True, return_tensors="pt")
             offsets = enc.pop("offset_mapping").tolist()
             gen = self.model.generate(**enc.to(self.device), num_return_sequences=n,
-                                      max_new_tokens=self.max_new_tokens, **gen_kwargs)
-            decoded = self.tok.batch_decode(gen, skip_special_tokens=False)
+                                      max_new_tokens=self.max_new_tokens, return_dict_in_generate=True,
+                                      output_scores=with_scores, **gen_kwargs)
+            decoded = self.tok.batch_decode(gen.sequences, skip_special_tokens=False)
+            scores = gen.sequences_scores.tolist() if with_scores else [None] * len(decoded)
             for j, i in enumerate(idx):
                 spans = self._unk_spans(batch[j], enc["input_ids"][j].tolist(), offsets[j])
-                for d in decoded[j * n:(j + 1) * n]:
+                for d, sc in zip(decoded[j * n:(j + 1) * n], scores[j * n:(j + 1) * n]):
                     d = d.replace(self.tok.pad_token, "").replace(self.tok.eos_token, "")
-                    out[i].append(restore_unknown(d, spans, self.tok.unk_token))
+                    text = restore_unknown(d, spans, self.tok.unk_token)
+                    out[i].append((text, sc) if with_scores else text)
         return out
+
+    def nbest(self, texts: list[str], n: int = 4) -> list[list[dict]]:
+        """n phương án sửa tốt nhất mỗi câu, kèm xác suất tương đối (chuẩn hóa trong n phương án)."""
+        rows = self.generate_many(texts, n, with_scores=True, num_beams=max(self.num_beams, n))
+        return [merge_nbest(r) for r in rows]
 
     def __call__(self, texts: list[str]) -> list[str]:
         return [c[0] for c in self.generate_many(texts, num_beams=self.num_beams)]
+
+
+def merge_nbest(cands: list[tuple[str, float]]) -> list[dict]:
+    """Softmax trên log-prob của các phương án, gộp phương án trùng chữ, sắp giảm dần."""
+    m = max(s for _, s in cands)
+    probs = {}
+    for text, s in cands:
+        probs[text] = probs.get(text, 0.0) + math.exp(s - m)
+    z = sum(probs.values())
+    return sorted(({"text": t, "prob": p / z} for t, p in probs.items()), key=lambda r: -r["prob"])
 
 
 class HubCorrector:

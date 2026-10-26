@@ -65,6 +65,14 @@ if st.button("Xử lý", type="primary", disabled=not text.strip()):
     st.markdown(highlight(r["edits"]))
     if r["unknown_words"]:
         st.warning(f"Từ có thể vẫn còn lỗi: **{', '.join(r['unknown_words'])}**. Hãy kiểm tra lại các từ này.")
+    if r["uncertain"]:
+        st.markdown("**Chưa chắc chắn:** " + " · ".join(
+            f"**{html.escape(u['span'])}** (hoặc: {', '.join(html.escape(o) for o in u['options'])})"
+            for u in r["uncertain"]))
+    if len(r["alternatives"]) > 1:
+        with st.expander("Các phương án sửa khác"):
+            for a in r["alternatives"]:
+                st.markdown(f"- {html.escape(a['text'])}  <small>({a['prob']:.0%})</small>", unsafe_allow_html=True)
 
     st.subheader("2. Gợi ý diễn đạt")
     if r["unknown_words"]:

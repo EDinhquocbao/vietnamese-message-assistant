@@ -4,7 +4,9 @@ Một ứng viên bị loại nếu:
 - làm mất/đổi số, mã, giờ, ngày (8h, 200k, #A1023, 15/11), tên riêng (chữ hoa giữa câu),
   hoặc thêm/bỏ phủ định (không, chưa, chẳng, đừng...) -> đổi nghĩa dù embedding vẫn gần;
 - độ tương đồng ngữ nghĩa với câu gốc (cosine embedding) < min_similarity;
-- gần như chép lại câu gốc (độ trùng từ > max_overlap).
+- gần như chép lại câu gốc (độ trùng từ > max_overlap);
+- (nếu bật NLI) hai câu không suy ra nhau: min(P(gốc ⇒ ứng viên), P(ứng viên ⇒ gốc)) < min_entailment.
+  Bắt được lỗi embedding bỏ sót như "Đừng quên mua sữa" -> "Không nên mua sữa" (vẫn còn phủ định).
 Điểm = similarity + diversity_weight * (1 - overlap): ưu tiên câu giữ nghĩa nhưng khác cách nói.
 Các gợi ý được chọn lần lượt kiểu MMR để không na ná nhau.
 """
@@ -62,8 +64,11 @@ class Ranker:
     def __init__(self, encode: Callable[[list[str]], np.ndarray] | None = None,
                  model_name: str = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2",
                  top_k: int = 3, min_similarity: float = 0.8, max_overlap: float = 0.9,
-                 diversity_weight: float = 0.3, redundancy_weight: float = 0.5):
+                 diversity_weight: float = 0.3, redundancy_weight: float = 0.5,
+                 entail: Callable[[list[str], list[str]], list[float]] | None = None,
+                 nli_model: str | None = None, min_entailment: float | None = None):
         self._encode, self.model_name = encode, model_name
+        self._entail, self.nli_model, self.min_entailment = entail, nli_model, min_entailment
         self.top_k, self.min_similarity, self.max_overlap = top_k, min_similarity, max_overlap
         self.diversity_weight, self.redundancy_weight = diversity_weight, redundancy_weight
 
@@ -76,6 +81,28 @@ class Ranker:
             self._encode = lambda xs: model.encode(xs, normalize_embeddings=True, convert_to_numpy=True)
         return self._encode(texts)
 
+    def entail(self, premises: list[str], hypotheses: list[str]) -> list[float]:
+        """P(premise ⇒ hypothesis) theo mô hình NLI (nạp khi cần lần đầu)."""
+        if self._entail is None:
+            import torch
+            from transformers import AutoModelForSequenceClassification, AutoTokenizer
+
+            tok = AutoTokenizer.from_pretrained(self.nli_model)
+            model = AutoModelForSequenceClassification.from_pretrained(self.nli_model).eval()
+            label = model.config.label2id.get("entailment", 0)
+
+            @torch.no_grad()
+            def run(ps, hs):
+                out = []
+                for i in range(0, len(ps), 32):
+                    enc = tok(ps[i:i + 32], hs[i:i + 32], return_tensors="pt", padding=True, truncation=True,
+                              max_length=256)
+                    out += model(**enc).logits.softmax(-1)[:, label].tolist()
+                return out
+
+            self._entail = run
+        return self._entail(premises, hypotheses)
+
     def score_all(self, source: str, candidates: list[str]) -> list[dict]:
         """Chấm mọi ứng viên; `rejected` là lý do bị loại (None nếu giữ)."""
         if not candidates:
@@ -85,13 +112,22 @@ class Ranker:
         rows = []
         for c, sim in zip(candidates, sims):
             ov = word_overlap(source, c)
-            reason = violates_protected(source, c)
-            if reason is None and sim < self.min_similarity:
-                reason = f"khác nghĩa (similarity {sim:.2f})"
+            reason = f"khác nghĩa (similarity {sim:.2f})" if sim < self.min_similarity else None
+            reason = reason or violates_protected(source, c)
             if reason is None and ov > self.max_overlap:
                 reason = "gần như chép lại câu gốc"
-            rows.append({"text": c, "similarity": float(sim), "overlap": ov,
+            rows.append({"text": c, "similarity": float(sim), "overlap": ov, "entailment": None,
                          "score": float(sim) + self.diversity_weight * (1 - ov), "rejected": reason})
+        if self.min_entailment is not None and (self._entail or self.nli_model):
+            alive = [r for r in rows if r["rejected"] is None]
+            if alive:
+                texts = [r["text"] for r in alive]
+                fwd = self.entail([source] * len(texts), texts)
+                bwd = self.entail(texts, [source] * len(texts))
+                for r, f, b in zip(alive, fwd, bwd):
+                    r["entailment"] = min(f, b)
+                    if r["entailment"] < self.min_entailment:
+                        r["rejected"] = f"không suy ra nhau (NLI {r['entailment']:.2f})"
         return rows
 
     def select(self, rows: list[dict]) -> list[dict]:
