@@ -88,7 +88,8 @@ class Ranker:
             from transformers import AutoModelForSequenceClassification, AutoTokenizer
 
             tok = AutoTokenizer.from_pretrained(self.nli_model)
-            model = AutoModelForSequenceClassification.from_pretrained(self.nli_model).eval()
+            device = "cuda" if torch.cuda.is_available() else "cpu"
+            model = AutoModelForSequenceClassification.from_pretrained(self.nli_model).to(device).eval()
             label = model.config.label2id.get("entailment", 0)
 
             @torch.no_grad()
@@ -96,7 +97,7 @@ class Ranker:
                 out = []
                 for i in range(0, len(ps), 32):
                     enc = tok(ps[i:i + 32], hs[i:i + 32], return_tensors="pt", padding=True, truncation=True,
-                              max_length=256)
+                              max_length=256).to(device)
                     out += model(**enc).logits.softmax(-1)[:, label].tolist()
                 return out
 

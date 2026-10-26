@@ -9,6 +9,10 @@ ranker:
   max_overlap: 0.9         # trùng từ > ngưỡng này = gần như chép lại
   diversity_weight: 0.3
   redundancy_weight: 0.5
+  # Lọc NLI hai chiều (mục 7 docs/improvement_plan.md). min_entailment: null = tắt.
+  # Ngưỡng chọn trên ViSP val bằng: python -m src.pipeline.calibrate_nli
+  nli_model: MoritzLaurer/mDeBERTa-v3-base-xnli-multilingual-nli-2mil7
+  min_entailment: null
 
 # Từ điển để phát hiện từ còn lỗi sau khi sửa (vd "nahu"); có từ lạ thì không hiện gợi ý diễn đạt.
 vocab:
