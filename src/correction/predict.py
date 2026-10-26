@@ -63,7 +63,9 @@ class Corrector:
     @torch.no_grad()
     def generate_many(self, texts: list[str], n: int = 1, with_scores: bool = False, **gen_kwargs) -> list[list]:
         """Sinh `n` câu cho mỗi câu đầu vào (gen_kwargs truyền thẳng cho model.generate).
-        with_scores=True (chỉ với beam search): mỗi phần tử là (câu, log-prob trung bình theo token)."""
+        with_scores=True (chỉ với beam search): mỗi phần tử là (câu, log-prob của CẢ câu). Beam search trả
+        log-prob chia cho độ dài; nhân lại với số token sinh ra, vì xác suất tính trên trung bình theo token
+        gần như bằng nhau giữa các phương án (27/25/25/24%) nên không giúp người dùng chọn."""
         texts = [normalize_text(t) for t in texts]
         order = sorted(range(len(texts)), key=lambda i: len(texts[i]))  # gom câu cùng độ dài, ít padding
         out = [[] for _ in texts]
@@ -76,7 +78,11 @@ class Corrector:
                                       max_new_tokens=self.max_new_tokens, return_dict_in_generate=True,
                                       output_scores=with_scores, **gen_kwargs)
             decoded = self.tok.batch_decode(gen.sequences, skip_special_tokens=False)
-            scores = gen.sequences_scores.tolist() if with_scores else [None] * len(decoded)
+            if with_scores:  # token đầu là decoder_start (= pad với T5) nên đếm token khác pad là số token sinh ra
+                lengths = (gen.sequences != self.tok.pad_token_id).sum(-1)
+                scores = (gen.sequences_scores * lengths).tolist()
+            else:
+                scores = [None] * len(decoded)
             for j, i in enumerate(idx):
                 spans = self._unk_spans(batch[j], enc["input_ids"][j].tolist(), offsets[j])
                 for d, sc in zip(decoded[j * n:(j + 1) * n], scores[j * n:(j + 1) * n]):
@@ -95,13 +101,14 @@ class Corrector:
 
 
 def merge_nbest(cands: list[tuple[str, float]]) -> list[dict]:
-    """Softmax trên log-prob của các phương án, gộp phương án trùng chữ, sắp giảm dần."""
+    """Softmax trên log-prob của các phương án, gộp phương án trùng chữ. GIỮ thứ tự beam search (chuẩn hóa
+    theo độ dài) để phương án đầu luôn trùng với kết quả `__call__` đã được đánh giá; xác suất chỉ để hiển thị."""
     m = max(s for _, s in cands)
     probs = {}
     for text, s in cands:
         probs[text] = probs.get(text, 0.0) + math.exp(s - m)
     z = sum(probs.values())
-    return sorted(({"text": t, "prob": p / z} for t, p in probs.items()), key=lambda r: -r["prob"])
+    return [{"text": t, "prob": p / z} for t, p in probs.items()]
 
 
 class HubCorrector:

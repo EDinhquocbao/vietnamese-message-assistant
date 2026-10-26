@@ -63,33 +63,60 @@ def uncertain_words(alternatives: list[dict], min_prob: float = 0.1) -> list[dic
     return [{"span": s, "options": o} for s, o in found.items()]
 
 
+def choices(alternatives: list[dict], k: int = 3, min_prob: float = 0.02) -> list[dict]:
+    """Tối đa k phương án sửa để người dùng chọn, giữ thứ tự beam search: gộp các phương án chỉ khác chữ
+    hoa/dấu câu cuối (cộng xác suất, giữ cách viết của phương án đứng trước) và bỏ phương án dưới min_prob."""
+    merged: dict[str, dict] = {}
+    for a in alternatives:
+        key = a["text"].lower().rstrip(" .!?…")
+        if key in merged:
+            merged[key]["prob"] += a["prob"]
+        else:
+            merged[key] = {"text": a["text"], "prob": a["prob"]}
+    return [c for i, c in enumerate(merged.values()) if i == 0 or c["prob"] >= min_prob][:k]
+
+
 class Assistant:
+    """Hai bước: correct() đưa các phương án sửa; suggest() gợi ý diễn đạt cho phương án được chọn."""
+
     def __init__(self, corrector, paraphraser, ranker: Ranker, vocab: set[str] | None = None):
         self.corrector, self.paraphraser, self.ranker = corrector, paraphraser, ranker
         self.vocab = vocab
 
-    def run_batch(self, texts: list[str]) -> list[dict]:
+    def correct_batch(self, texts: list[str]) -> list[dict]:
         if hasattr(self.corrector, "nbest"):
             alternatives = self.corrector.nbest(texts)
         else:  # bộ sửa lỗi chỉ trả một câu (baseline, mô hình giả trong test)
             alternatives = [[{"text": c, "prob": 1.0}] for c in self.corrector(texts)]
-        corrected = [a[0]["text"] for a in alternatives]
+        return [{"input": t, "alternatives": alts, "choices": choices(alts), "uncertain": uncertain_words(alts)}
+                for t, alts in zip(texts, alternatives)]
+
+    def correct(self, text: str) -> dict:
+        return self.correct_batch([text])[0]
+
+    def suggest_batch(self, sources: list[str], corrected: list[str]) -> list[dict]:
         all_cands = self.paraphraser.candidates(corrected)
         out = []
-        for src, cor, cands, alts in zip(texts, corrected, all_cands, alternatives):
+        for src, cor, cands in zip(sources, corrected, all_cands):
             rows = self.ranker.score_all(cor, cands)
             unknown = unknown_words(cor, self.vocab) if self.vocab else []
             out.append({
-                "input": src,
                 "corrected": cor,
                 "edits": describe_edits(src, cor),
                 "unknown_words": unknown,  # từ nghi còn lỗi sau khi sửa
-                "alternatives": alts,      # các phương án sửa (N-best) kèm xác suất
-                "uncertain": uncertain_words(alts),
                 "suggestions": [] if unknown else self.ranker.select(rows),
                 "candidates": rows,  # mọi ứng viên kèm lý do bị loại, để xem từng bước
             })
         return out
+
+    def suggest(self, source: str, corrected: str) -> dict:
+        return self.suggest_batch([source], [corrected])[0]
+
+    def run_batch(self, texts: list[str]) -> list[dict]:
+        """Chạy cả hai bước, tự chọn phương án sửa tốt nhất (dùng cho đánh giá và dòng lệnh)."""
+        corr = self.correct_batch(texts)
+        sugg = self.suggest_batch(texts, [c["choices"][0]["text"] for c in corr])
+        return [{**c, **s} for c, s in zip(corr, sugg)]
 
     def run(self, text: str) -> dict:
         return self.run_batch([text])[0]

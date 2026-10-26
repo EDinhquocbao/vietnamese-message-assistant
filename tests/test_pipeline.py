@@ -145,3 +145,30 @@ def test_ranker_nli_rejects_non_entailing_candidates():
     assert by_text["Đừng quên mua sữa cho con nha"]["rejected"] is None
     assert by_text["Không nên mua sữa cho bé nhé"]["rejected"].startswith("không suy ra nhau")
     assert by_text["Đừng quên mua sữa cho con nha"]["entailment"] == 0.95
+
+
+def test_choices_merge_trivial_variants_and_limit():
+    from src.pipeline.assistant import choices
+
+    alts = [{"text": "người mai ăn gì không", "prob": 0.42}, {"text": "Người mai ăn gì không?", "prob": 0.10},
+            {"text": "ngày mai ăn gì không", "prob": 0.21}, {"text": "người yêu mai ăn gì không", "prob": 0.16},
+            {"text": "người mãi ăn gì không", "prob": 0.1}, {"text": "ngừi mai ăn gì không", "prob": 0.01}]
+    out = choices(alts, k=3, min_prob=0.02)
+    assert [c["text"] for c in out] == ["người mai ăn gì không", "ngày mai ăn gì không", "người yêu mai ăn gì không"]
+    assert abs(out[0]["prob"] - 0.52) < 1e-9          # gộp biến thể chỉ khác hoa/dấu câu cuối
+    assert choices([{"text": "a", "prob": 1.0}]) == [{"text": "a", "prob": 1.0}]
+
+
+def test_assistant_suggest_for_chosen_option():
+    from src.pipeline.assistant import Assistant
+
+    class FakePara:
+        def candidates(self, texts):
+            return [[f"Gợi ý cho: {t}"] for t in texts]
+
+    a = Assistant(lambda xs: list(xs), FakePara(), Ranker(encode=_fake_encode, max_overlap=1.0, min_similarity=0.0))
+    corr = a.correct("ngy mai di hoc")
+    assert corr["choices"][0]["text"] == "ngy mai di hoc"
+    s = a.suggest("ngy mai di hoc", "ngày mai đi học")
+    assert s["corrected"] == "ngày mai đi học" and s["edits"]
+    assert [x["text"] for x in s["suggestions"]] == ["Gợi ý cho: ngày mai đi học"]
