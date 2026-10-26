@@ -1,0 +1,76 @@
+# Cấu hình dữ liệu cho giai đoạn 1-2 (khảo sát + chuẩn bị)
+seed: 42
+
+raw_dir: data/raw
+processed_dir: data/processed
+reports_dir: reports
+
+datasets:
+  vsec:
+    hf_name: nguyenthanhasia/vsec-vietnamese-spell-correction
+    # Để null = tự dò. Sau khi chạy inspect_data, điền tên cột thật vào đây cho chắc.
+    source_col: text             # câu có lỗi
+    target_col: corrected_text   # câu đã sửa
+    group_id_col: null           # VSEC không có id; nhóm theo câu chuẩn
+    group_by: target             # một câu chuẩn không được nằm ở nhiều tập
+  visp:
+    hf_name: ngwgsang/ViSP
+    source_col: original_text     # câu gốc
+    target_col: paraphrase_text   # câu diễn đạt lại
+    group_id_col: original_id     # id cụm câu đồng nghĩa, dùng để chia nhóm
+    group_by: group_id            # các câu của cùng một cụm nằm cùng một tập
+    # ViSP thực chất là ~47k cụm, mỗi cụm n câu đồng nghĩa (n=3..12), và 1.18M dòng
+    # là mọi cặp có thứ tự n*(n-1) trong cụm -> lặp rất nhiều. Chỉ lấy vài cặp mỗi cụm;
+    # các câu còn lại của cụm được giữ trong cột `references` để đánh giá đa tham chiếu.
+    max_pairs_per_group: 2        # null = lấy mọi cặp
+    use_original_split: true      # split gốc của ViSP đã tách theo cụm (0 cụm nằm ở >1 split)
+
+  # --- Bổ sung: dữ liệu sửa lỗi kiểu tin nhắn (xem mục "Cập nhật" trong file plan) ---
+  vilexnorm:
+    # Bình luận mạng xã hội, câu chuẩn do NGƯỜI gán nhãn (EACL 2024). CC BY-NC-SA 4.0, chỉ dùng nghiên cứu.
+    # Lấy bản GitHub (giữ chữ hoa, có sẵn split 8:1:1) thay vì bản HF (đã hạ chữ thường, mất cột split).
+    citation: "Nguyen, Le, Nguyen. ViLexNorm: A Lexical Normalization Corpus for Vietnamese Social Media Text. EACL 2024"
+    license: CC BY-NC-SA 4.0
+    files:  # ghim theo commit để tái lập
+      train: https://raw.githubusercontent.com/ngxtnhi/ViLexNorm/1070c6b9b00830fad278f48d9797df9ae1c942ac/data/train.csv
+      validation: https://raw.githubusercontent.com/ngxtnhi/ViLexNorm/1070c6b9b00830fad278f48d9797df9ae1c942ac/data/dev.csv
+      test: https://raw.githubusercontent.com/ngxtnhi/ViLexNorm/1070c6b9b00830fad278f48d9797df9ae1c942ac/data/test.csv
+    source_col: original
+    target_col: normalized
+    group_id_col: null
+    group_by: target
+    use_original_split: true
+  vec:
+    # ~70k cặp: bình luận MXH + tin tức bị làm nhiễu (bỏ dấu, gõ telex). Nhãn do LLM sinh -> có nhiễu.
+    # CHỈ dùng để bổ sung dữ liệu train; tập test của nó chỉ để tham khảo, không dùng để kết luận.
+    hf_name: yammdd/vietnamese-error-correction-corpus
+    license: MIT
+    files:
+      train: https://huggingface.co/datasets/yammdd/vietnamese-error-correction-corpus/resolve/c9c0d24402726d69f211d45d0a09bdf6ded078b8/train.csv
+      validation: https://huggingface.co/datasets/yammdd/vietnamese-error-correction-corpus/resolve/c9c0d24402726d69f211d45d0a09bdf6ded078b8/val.csv
+      test: https://huggingface.co/datasets/yammdd/vietnamese-error-correction-corpus/resolve/c9c0d24402726d69f211d45d0a09bdf6ded078b8/test.csv
+    source_col: input
+    target_col: target
+    group_id_col: null
+    group_by: target
+    use_original_split: true
+    # 83% câu của ViLexNorm (8.650/10.463) đã nằm sẵn trong VEC với nhãn gần như y hệt
+    # -> rò rỉ test ViLexNorm + vấn đề license (CC BY-NC-SA bị phát hành lại dưới MIT).
+    # Bỏ khỏi VEC mọi dòng có câu trùng với ViLexNorm; chỉ dùng phần riêng của VEC.
+    drop_overlap_with: [vilexnorm]
+
+# Tập train/val gộp cho mô hình sửa lỗi -> data/processed/correction/. Test luôn giữ riêng từng dataset.
+correction_mix:
+  datasets: [vsec, vilexnorm, vec]
+
+preprocess:
+  min_chars: 2
+  max_chars: 500        # tin nhắn/câu ngắn
+  drop_identical_pairs: false  # VSEC: không có cặp giống nhau nào (mọi câu đều có lỗi);
+                               # tỉ lệ sửa quá tay được đo bằng cách đưa câu chuẩn vào (xem src/correction/evaluate.py)
+                               # ViSP: script tự bỏ cặp giống hệt (không phải diễn đạt lại)
+
+split:
+  train: 0.8
+  val: 0.1
+  test: 0.1

@@ -14,6 +14,18 @@ semantic-preserving sentence rephrasing using Transformer models.
 
 - VSEC: https://huggingface.co/datasets/nguyenthanhasia/vsec-vietnamese-spell-correction
 - ViSP: https://huggingface.co/datasets/ngwgsang/ViSP
+- ViLexNorm (social-media normalization, human-annotated, CC BY-NC-SA 4.0): https://github.com/ngxtnhi/ViLexNorm
+- VEC (LLM-labeled, training augmentation only; rows overlapping ViLexNorm are removed): https://huggingface.co/datasets/yammdd/vietnamese-error-correction-corpus
+
+Data pipeline:
+
+```bash
+python -m src.data.download_data
+python -m src.data.preprocess_vsec --all
+python -m src.data.preprocess_visp
+python -m src.data.split_data
+python -m src.data.build_correction_mix
+```
 
 Please check each dataset's license and usage terms before use.
 
