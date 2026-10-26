@@ -29,6 +29,7 @@ Trạng thái: ✅ xong · 🔄 đang làm · ⏳ chưa làm · 💤 để sau (
 | 10 | Huấn luyện thêm epoch cho mô hình diễn đạt lại (val loss còn giảm ở epoch 2) | 💤 | |
 | 11 | Quy tắc phủ định chặn nhầm phủ định kép ("Đừng quên" ⇔ "Nhớ") | 💤 | phát hiện khi viết test NLI; có thể bỏ quy tắc khi NLI đã bật |
 | 12 | Phát hiện đảo vai (ai làm gì cho ai) trong gợi ý | 💤 | cả embedding lẫn NLI đều bỏ sót; cần quy tắc theo đại từ hoặc mô hình khác |
+| 13 | Giảm sửa quá tay của v2+GĐ2 (xóa từ lặp hợp lệ, đổi tên riêng); thử giảm tỉ lệ lỗi "phím đúp"/tăng p_clean | 💤 | |
 
 ## Kết quả vòng 1 (26/10/2026)
 
@@ -75,6 +76,5 @@ Sửa quá tay tăng trên ViLexNorm: phần lớn là chuẩn hóa khoảng tr�
 Hai câu người dùng thử: "tí nữa mìn cùn nahu làm bài nhé" sửa đúng hoàn toàn; "ngy mai khi nà học a" ->
 "ngày mai khi này học anh" kèm phương án "nào".
 
-| 13 | Giảm sửa quá tay của v2+GĐ2 (xóa từ lặp hợp lệ, đổi tên riêng); thử giảm tỉ lệ lỗi "phím đúp"/tăng p_clean | 💤 | |
 
 Đã cập nhật mục 14.9–14.13 trong file plan .docx.
