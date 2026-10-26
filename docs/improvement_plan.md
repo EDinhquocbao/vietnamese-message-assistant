@@ -17,13 +17,13 @@ Trạng thái: ✅ xong · 🔄 đang làm · ⏳ chưa làm · 💤 để sau (
 
 | # | Mục | Trạng thái | Ghi chú |
 |---|---|---|---|
-| 1 | Mô hình lỗi "gõ nhanh": bỏ dấu (cả câu/một phần) + đảo chữ, bấm hụt, phím bên cạnh, phím đúp, dính chữ, Telex dở; tăng lên ~90k câu | 🔄 | Dữ liệu xong (89.190 câu, `augment_report.json`); đang huấn luyện `vit5-base-aug` (2 epoch, 154k cặp) |
+| 1 | Mô hình lỗi "gõ nhanh": bỏ dấu (cả câu/một phần) + đảo chữ, bấm hụt, phím bên cạnh, phím đúp, dính chữ, Telex dở; tăng lên ~90k câu | ✅ | 89.190 câu; `vit5-base-aug` + giai đoạn 2 `vit5-base-aug-ft` (đang dùng trong demo) |
 | 2 | Bộ test lỗi tự nhiên do người gõ | 💤 | Thay bằng bộ test sinh tự động theo hồ sơ "gõ nhanh" (mục 3) theo yêu cầu; hạn chế: lỗi nhân tạo có thể dễ hơn lỗi thật |
 | 3 | Script đo theo từng kiểu lỗi (stress test) trên câu test held-out | ✅ | `src/correction/stress_test.py`, 400 câu ViLexNorm test × 8 kiểu lỗi, seed 2026 |
 | 4 | So sánh với mô hình có sẵn `bmd1905/vietnamese-correction-v2` (BARTpho, Apache-2.0) | ✅ | Đã tải, nạp được (`HubCorrector`); thử nhanh: sửa tốt lỗi gõ nhưng không hiểu teencode (e, r, c, vs) và hay tự thêm dấu câu/viết hoa. Chờ GPU để chạy stress test + 3 tập test |
 | 5 | Mô hình mức ký tự ByT5-small | 💤 | chuỗi dài gấp ~3 lần, huấn luyện chậm 2–3 lần trên GPU 6 GB |
 | 6 | Đưa 2–3 phương án sửa (N-best) cho từ không chắc chắn trong demo | ✅ | `Corrector.nbest`, `uncertain_words`; demo hiện "Chưa chắc chắn: ngày (hoặc: người yêu)" |
-| 7 | Lọc nghĩa gợi ý bằng NLI hai chiều (mDeBERTa-v3 XNLI, MIT) | 🔄 | Code xong trong `Ranker`; đang chọn ngưỡng trên ViSP val. Thử tay: chặn được "Không nên mua sữa" (0,02) nhưng KHÔNG chặn được đảo vai "em gửi chị" -> "chị gửi em" (0,98) |
+| 7 | Lọc nghĩa gợi ý bằng NLI hai chiều (mDeBERTa-v3 XNLI, MIT) | ✅ | Ngưỡng 0,17 = phân vị 10% trên ViSP val (`calibrate_nli`). Thử tay: chặn được "Không nên mua sữa" (0,02) nhưng KHÔNG chặn được đảo vai "em gửi chị" -> "chị gửi em" (0,98) |
 | 8 | Diễn đạt lại theo văn phong tin nhắn (dữ liệu sinh bằng LLM hoặc LLM nhỏ dùng prompt) | 💤 | tốn công nhất; đưa vào "hướng phát triển" |
 | 9 | Hậu xử lý ký tự bị tokenizer chuẩn hóa ("…" -> "...", số lượng ")" trong "=))") | ✅ | `restore_symbols`; ViLexNorm v1: EM 69,1% -> 69,8%, WER 3,96% -> 3,72% |
 | 10 | Huấn luyện thêm epoch cho mô hình diễn đạt lại (val loss còn giảm ở epoch 2) | 💤 | |
@@ -61,3 +61,20 @@ Nhận xét:
   thêm dấu cho câu viết thường không dấu, và thêm dấu câu/viết hoa vào 94% câu đúng của ViLexNorm.
 - Hướng xử lý đang thử: fine-tune giai đoạn 2 chỉ trên dữ liệu thật (`configs/correction_stage2.yaml`,
   1 epoch, lr 1e-4) -> `vit5-base-aug-ft`.
+
+## Kết quả vòng 2: fine-tune giai đoạn 2 (chỉ dữ liệu thật, 1 epoch, lr 1e-4)
+
+| | ViLexNorm (WER / đúng hết / sửa quá tay) | VSEC | VEC | Stress "gõ nhanh" đúng hết |
+|---|---|---|---|---|
+| v1 | 3,72% / 69,8% / 10,9% | 1,24% / 67,7% / 4,4% | 8,84% / 51,4% / 7,3% | 6,5% |
+| v2 | 5,00% / 66,5% / 12,3% | 1,22% / 68,8% / 4,7% | 8,19% / 51,3% / 9,6% | 26,8% |
+| **v2 + GĐ2 (chọn)** | 3,74% / 68,4% / 14,3% | 1,16% / 70,1% / 4,1% | 7,69% / 52,6% / 9,1% | 26,5% |
+
+Sửa quá tay tăng trên ViLexNorm: phần lớn là chuẩn hóa khoảng trắng/biến thể chính tả, nhưng có xóa từ lặp
+("cấp 2 cấp 3" -> "cấp 3"), có thể do lỗi "phím đúp" trong dữ liệu nhân tạo -> việc để sau (#13).
+Hai câu người dùng thử: "tí nữa mìn cùn nahu làm bài nhé" sửa đúng hoàn toàn; "ngy mai khi nà học a" ->
+"ngày mai khi này học anh" kèm phương án "nào".
+
+| 13 | Giảm sửa quá tay của v2+GĐ2 (xóa từ lặp hợp lệ, đổi tên riêng); thử giảm tỉ lệ lỗi "phím đúp"/tăng p_clean | 💤 | |
+
+Đã cập nhật mục 14.9–14.13 trong file plan .docx.
