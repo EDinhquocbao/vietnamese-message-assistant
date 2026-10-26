@@ -9,3 +9,10 @@ ranker:
   max_overlap: 0.9         # trùng từ > ngưỡng này = gần như chép lại
   diversity_weight: 0.3
   redundancy_weight: 0.5
+
+# Từ điển để phát hiện từ còn lỗi sau khi sửa (vd "nahu"); có từ lạ thì không hiện gợi ý diễn đạt.
+vocab:
+  sources:                    # chỉ lấy cột chứa câu CHUẨN
+    data/processed/correction/train.jsonl: [target]
+    data/processed/visp/train.jsonl: [source, target]
+  min_count: 2

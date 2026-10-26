@@ -84,3 +84,23 @@ def test_clean_candidate_fixes_artifacts():
     assert clean_candidate("Em bị ốm ạ", "Em bị bệnh ạ ạ.") == "Em bị bệnh ạ."
     assert clean_candidate("nói sớm sớm nhé", "nói sớm sớm nha") == "nói sớm sớm nha"  # lặp có sẵn ở câu gốc
     assert clean_candidate("a", 'Anh nói "được" rồi') == 'Anh nói "được" rồi'          # ngoặc cân bằng
+
+
+def test_unknown_words_flags_lowercase_oov_only():
+    from src.pipeline.assistant import unknown_words
+
+    vocab = {"tí", "nữa", "mình", "cùn", "làm", "bài", "nhé", "về"}
+    assert unknown_words("tí nữa mình cùn nahu làm bài nhé", vocab) == ["nahu"]
+    assert unknown_words("Lan về 7h30 nhé!", vocab) == []  # tên riêng, số, dấu câu không tính
+
+
+def test_assistant_hides_suggestions_when_correction_has_oov():
+    from src.pipeline.assistant import Assistant
+
+    class FakePara:
+        def candidates(self, texts):
+            return [["Sự nahu nhé"] for _ in texts]
+
+    a = Assistant(lambda xs: list(xs), FakePara(), Ranker(encode=_fake_encode), vocab={"tí", "nữa", "nhé"})
+    r = a.run("tí nữa nahu nhé")
+    assert r["unknown_words"] == ["nahu"] and r["suggestions"] == []

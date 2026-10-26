@@ -63,9 +63,13 @@ if st.button("Xử lý", type="primary", disabled=not text.strip()):
     st.subheader("1. Câu đã sửa")
     st.success(r["corrected"])
     st.markdown(highlight(r["edits"]))
+    if r["unknown_words"]:
+        st.warning(f"Từ có thể vẫn còn lỗi: **{', '.join(r['unknown_words'])}**. Hãy kiểm tra lại các từ này.")
 
     st.subheader("2. Gợi ý diễn đạt")
-    if not r["suggestions"]:
+    if r["unknown_words"]:
+        st.info("Không đưa gợi ý vì câu đã sửa còn từ nghi lỗi (gợi ý sinh từ câu sai thường vô nghĩa).")
+    elif not r["suggestions"]:
         st.info("Không có gợi ý nào vừa giữ nghĩa vừa khác câu gốc đủ nhiều.")
     for i, s in enumerate(r["suggestions"], 1):
         st.markdown(f"**{i}.** {s['text']}  \n<small>giống nghĩa {s['similarity']:.2f} · trùng từ {s['overlap']:.2f}</small>",
