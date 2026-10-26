@@ -12,7 +12,7 @@ from collections import Counter
 
 import pandas as pd
 
-from src.correction.predict import from_config as load_corrector
+from src.correction.predict import choices, from_config as load_corrector
 from src.paraphrase.generate import from_config as load_paraphraser
 from src.pipeline.ranker import Ranker
 from src.utils.metrics import tokenize, word_edits
@@ -61,19 +61,6 @@ def uncertain_words(alternatives: list[dict], min_prob: float = 0.1) -> list[dic
             if o not in opts:
                 opts.append(o)
     return [{"span": s, "options": o} for s, o in found.items()]
-
-
-def choices(alternatives: list[dict], k: int = 3, min_prob: float = 0.02) -> list[dict]:
-    """Tối đa k phương án sửa để người dùng chọn, giữ thứ tự beam search: gộp các phương án chỉ khác chữ
-    hoa/dấu câu cuối (cộng xác suất, giữ cách viết của phương án đứng trước) và bỏ phương án dưới min_prob."""
-    merged: dict[str, dict] = {}
-    for a in alternatives:
-        key = a["text"].lower().rstrip(" .!?…")
-        if key in merged:
-            merged[key]["prob"] += a["prob"]
-        else:
-            merged[key] = {"text": a["text"], "prob": a["prob"]}
-    return [c for i, c in enumerate(merged.values()) if i == 0 or c["prob"] >= min_prob][:k]
 
 
 class Assistant:

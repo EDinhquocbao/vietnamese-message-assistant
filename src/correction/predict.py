@@ -111,6 +111,27 @@ def merge_nbest(cands: list[tuple[str, float]]) -> list[dict]:
     return [{"text": t, "prob": p / z} for t, p in probs.items()]
 
 
+def choices(alternatives: list[dict], k: int = 3, min_prob: float = 0.02) -> list[dict]:
+    """Tối đa k phương án sửa để người dùng chọn, giữ thứ tự beam search: gộp các phương án chỉ khác chữ
+    hoa/dấu câu cuối (cộng xác suất, giữ cách viết của phương án đứng trước) và bỏ phương án dưới min_prob."""
+    merged: dict[str, dict] = {}
+    for a in alternatives:
+        key = a["text"].lower().rstrip(" .!?…")
+        if key in merged:
+            merged[key]["prob"] += a["prob"]
+        else:
+            merged[key] = {"text": a["text"], "prob": a["prob"]}
+    return [c for i, c in enumerate(merged.values()) if i == 0 or c["prob"] >= min_prob][:k]
+
+
+def top_options(model, texts: list[str], k: int = 3) -> list[list[str]]:
+    """Các phương án sửa hiển thị cho người dùng (như demo); phần tử đầu = kết quả mặc định.
+    Mô hình không có N-best (baseline, mô hình trên Hub) chỉ có một phương án."""
+    if hasattr(model, "nbest"):
+        return [[c["text"] for c in choices(alts, k)] for alts in model.nbest(texts)]
+    return [[p] for p in model(texts)]
+
+
 class HubCorrector:
     """Mô hình sửa lỗi bất kỳ trên Hugging Face Hub (vd bmd1905/vietnamese-correction-v2, BARTpho) để so sánh.
     Tokenizer chậm (không có offset) nên không khôi phục <unk>."""

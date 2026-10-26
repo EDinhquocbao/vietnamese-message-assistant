@@ -8,6 +8,8 @@ Chạy:  python -m src.correction.stress_test --models copy models/correction/vi
            models/correction/vit5-base-aug bmd1905/vietnamese-correction-v2
 Kết quả: outputs/metrics/stress_<hệ thống>.json, bảng so sánh outputs/metrics/stress_comparison.md,
 và dự đoán từng câu ở outputs/predictions/stress_<hệ thống>.jsonl (để phân tích lỗi).
+Mô hình có N-best còn được đo "đúng trong top-3": câu đúng nằm trong tối đa 3 phương án mà demo cho
+người dùng chọn (xem top_options) -> outputs/metrics/stress_topk.md.
 """
 import argparse
 import json
@@ -16,7 +18,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from src.correction.predict import load_any
+from src.correction.predict import load_any, top_options
 from src.data.augment_errors import (
     DIACRITIC_ERRORS, ERROR_TYPES, TYPING_ERRORS, corrupt_words, strip_diacritics,
 )
@@ -67,6 +69,7 @@ def score(df: pd.DataFrame) -> dict:
             "wer_input": wer(part.input.tolist(), part.target.tolist()),
             "wer": wer(part.pred.tolist(), part.target.tolist()),
             "exact_match": float((part.pred == part.target).mean()),
+            "exact_match_top3": float(sum(t in o for t, o in zip(part.target, part.options)) / len(part)),
         }
     return out
 
@@ -82,6 +85,16 @@ def to_markdown(results: dict[str, dict]) -> str:
     return "\n".join(lines)
 
 
+def topk_markdown(results: dict[str, dict]) -> str:
+    systems = [s for s in results if s != "copy"]
+    lines = ["| Kiểu lỗi | " + " | ".join(f"{s}: đúng ở phương án đầu / trong top-3" for s in systems) + " |",
+             "|---|" + "---|" * len(systems)]
+    for c in CATEGORIES:
+        cells = [f"{results[s][c]['exact_match']:.1%} / {results[s][c]['exact_match_top3']:.1%}" for s in systems]
+        lines.append(f"| {LABELS[c]} | " + " | ".join(cells) + " |")
+    return "\n".join(lines)
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--models", nargs="+", required=True,
@@ -94,7 +107,8 @@ def main():
     results = {}
     for name in args.models:
         system = "copy" if name == "copy" else Path(name).name
-        df = inputs.assign(pred=load_any(name)(inputs.input.tolist()))
+        options = top_options(load_any(name), inputs.input.tolist())
+        df = inputs.assign(pred=[o[0] for o in options], options=options)
         results[system] = score(df)
         df.to_json(Path("outputs/predictions") / f"stress_{system}.jsonl", orient="records", lines=True,
                    force_ascii=False)
@@ -108,6 +122,11 @@ def main():
         f"Stress test trên {args.n} câu chuẩn của {args.data} (seed {SEED}). Ô: WER sau sửa / tỉ lệ câu đúng hết.\n\n"
         + table + "\n", encoding="utf-8")
     print(table)
+    topk = topk_markdown(results)
+    Path("outputs/metrics/stress_topk.md").write_text(
+        f"Câu đúng ở phương án mặc định / nằm trong tối đa 3 phương án demo đưa ra ({args.n} câu, seed {SEED}).\n\n"
+        + topk + "\n", encoding="utf-8")
+    print(topk)
 
 
 if __name__ == "__main__":

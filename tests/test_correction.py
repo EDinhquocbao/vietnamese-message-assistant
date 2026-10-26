@@ -38,8 +38,11 @@ def test_stress_inputs_are_reproducible_and_noisy(tmp_path):
     assert a.equals(b) and set(a.category) == set(CATEGORIES)
     noisy = a[a.category != "cau_dung"]
     assert (noisy.input != noisy.target).all()
-    s = score(a.assign(pred=a.target))
+    s = score(a.assign(pred=a.target, options=[[t] for t in a.target]))
     assert all(v["exact_match"] == 1.0 and v["wer"] == 0.0 for v in s.values())
+    # dự đoán sai nhưng câu đúng nằm ở phương án thứ 2 -> chỉ tính vào top-3
+    s2 = score(a.assign(pred=a.input, options=[[i, t] for i, t in zip(a.input, a.target)]))
+    assert s2["dao_chu"]["exact_match"] == 0.0 and s2["dao_chu"]["exact_match_top3"] == 1.0
 
 
 def test_merge_nbest_normalizes_and_merges():

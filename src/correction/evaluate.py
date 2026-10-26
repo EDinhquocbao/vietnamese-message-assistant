@@ -15,6 +15,7 @@ from typing import Callable
 
 import pandas as pd
 
+from src.correction.predict import top_options
 from src.utils.metrics import correction_report, overcorrection_rate
 
 BASELINES: dict[str, Callable[[list[str]], list[str]]] = {
@@ -24,8 +25,10 @@ BASELINES: dict[str, Callable[[list[str]], list[str]]] = {
 
 def evaluate(df: pd.DataFrame, predict: Callable[[list[str]], list[str]], return_preds: bool = False):
     sources, refs = df.source.tolist(), df.target.tolist()
-    preds = predict(sources)
+    options = top_options(predict, sources)  # phương án đầu = dự đoán; có N-best thì đo thêm top-3
+    preds = [o[0] for o in options]
     report = correction_report(sources, preds, refs)
+    report["exact_match_top3"] = sum(r in o for r, o in zip(refs, options)) / max(len(refs), 1)
     clean = sorted(set(refs))
     report["overcorrection_rate"] = overcorrection_rate(clean, predict(clean))
     report["n_clean"] = len(clean)
