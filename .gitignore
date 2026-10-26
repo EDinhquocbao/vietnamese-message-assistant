@@ -12,6 +12,10 @@ env/
 # Environment variables
 .env
 .env.*
+!.env.example
+
+# Test cache
+.pytest_cache/
 
 # Jupyter
 .ipynb_checkpoints/
@@ -23,14 +27,18 @@ data/test/*
 !data/raw/.gitkeep
 !data/processed/.gitkeep
 !data/test/.gitkeep
+!data/test/integration_test.csv
 
 # Model checkpoints
-models/*
+# (dùng "**" + "!*/" vì git không thể đưa lại file nằm trong thư mục đã bị bỏ qua)
+models/**
+!models/*/
 !models/correction/.gitkeep
 !models/paraphrase/.gitkeep
 
 # Outputs
-outputs/*
+outputs/**
+!outputs/*/
 !outputs/metrics/.gitkeep
 !outputs/predictions/.gitkeep
 !outputs/error_analysis/.gitkeep
