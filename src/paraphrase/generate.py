@@ -19,14 +19,31 @@ def _key(text: str) -> str:
     return normalize_text(text).lower().rstrip(" .!?…")
 
 
+def clean_candidate(source: str, text: str) -> str:
+    """Sửa lỗi bề mặt hay gặp: ngoặc kép lẻ (học từ câu trích dẫn trong ViSP) và từ lặp liền nhau
+    ("ạ ạ", "ơi ơi") mà câu gốc không có (giữ từ láy có sẵn như "sớm sớm")."""
+    text = normalize_text(text)
+    if text.count('"') % 2:
+        text = text.replace('"', "")
+    words, src = text.split(" "), f" {source.lower()} "
+    core = [w.lower().rstrip(".,!?…") for w in words]
+    # bỏ từ đứng trước trong cặp lặp, giữ từ sau để không mất dấu câu dính kèm ("ạ ạ." -> "ạ.")
+    kept = [w for i, w in enumerate(words)
+            if i + 1 == len(words) or core[i] != core[i + 1]
+            or w.lower() != core[i]  # từ trước có dấu câu dính kèm ("ơi, ơi") -> giữ
+            or f" {core[i]} {core[i]} " in src]
+    return normalize_text(" ".join(kept))
+
+
 def dedupe_candidates(source: str, candidates: list[str]) -> list[str]:
     """Giữ thứ tự, bỏ câu rỗng, câu trùng nhau và câu chỉ chép lại `source`."""
     seen, out = {_key(source)}, []
     for c in candidates:
+        c = clean_candidate(source, c)
         k = _key(c)
         if k and k not in seen:
             seen.add(k)
-            out.append(normalize_text(c))
+            out.append(c)
     return out
 
 

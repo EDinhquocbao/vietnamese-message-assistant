@@ -75,3 +75,12 @@ def test_integration_keeps_must_keep_items():
     assert keeps("mai đi học không", "ko")       # 'ko' được sửa thành 'không' vẫn tính là giữ phủ định
     assert not keeps("mai đi học nhé", "ko")
     assert keeps("bất kỳ", "")
+
+
+def test_clean_candidate_fixes_artifacts():
+    from src.paraphrase.generate import clean_candidate
+
+    assert clean_candidate("Mình đã gửi rồi", 'Mình đã gửi đi rồi."') == "Mình đã gửi đi rồi."
+    assert clean_candidate("Em bị ốm ạ", "Em bị bệnh ạ ạ.") == "Em bị bệnh ạ."
+    assert clean_candidate("nói sớm sớm nhé", "nói sớm sớm nha") == "nói sớm sớm nha"  # lặp có sẵn ở câu gốc
+    assert clean_candidate("a", 'Anh nói "được" rồi') == 'Anh nói "được" rồi'          # ngoặc cân bằng
