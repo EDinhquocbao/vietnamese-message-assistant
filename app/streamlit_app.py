@@ -66,5 +66,4 @@ if st.button("Xử lý", type="primary", disabled=not text.strip()):
         st.dataframe(
             [{"ứng viên": c["text"], "giống nghĩa": round(c["similarity"], 3), "trùng từ": round(c["overlap"], 3),
               "điểm": round(c["score"], 3), "bị loại vì": c["rejected"] or ""} for c in r["candidates"]],
-            use_container_width=True,
         )
