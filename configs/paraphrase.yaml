@@ -13,7 +13,7 @@ data:
   max_target_len: 128
 
 train:
-  epochs: 3
+  epochs: 2                 # câu ViSP dài gấp ~2 lần (trung vị 30 token) -> 3 epoch mất ~2 giờ
   batch_size: 16
   grad_accum: 2
   optim: adafactor
