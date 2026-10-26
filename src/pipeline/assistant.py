@@ -54,8 +54,11 @@ def uncertain_words(alternatives: list[dict], min_prob: float = 0.1) -> list[dic
         for i1, i2, rep in sorted(word_edits(best, alt["text"])):
             if i1 == i2:  # phương án khác chỉ chèn thêm từ, không có từ nào của câu tốt nhất để gạch chân
                 continue
-            opts = found.setdefault(" ".join(tokens[i1:i2]), [])
-            if (o := " ".join(rep)) not in opts:
+            span, o = " ".join(tokens[i1:i2]), " ".join(rep)
+            if o.lower() == span.lower():  # chỉ khác chữ hoa: không đáng hỏi người dùng
+                continue
+            opts = found.setdefault(span, [])
+            if o not in opts:
                 opts.append(o)
     return [{"span": s, "options": o} for s, o in found.items()]
 

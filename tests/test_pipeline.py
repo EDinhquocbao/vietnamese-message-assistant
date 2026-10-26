@@ -114,6 +114,8 @@ def test_uncertain_words_lists_alternatives():
             {"text": "ngày mai khi nào học à", "prob": 0.05}]  # dưới ngưỡng -> bỏ
     assert uncertain_words(alts, min_prob=0.1) == [{"span": "ngày", "options": ["người yêu"]}]
     assert uncertain_words(alts[:1]) == []
+    case_only = [{"text": "Đừng quên nhé", "prob": 0.6}, {"text": "đừng quên nhé", "prob": 0.4}]
+    assert uncertain_words(case_only) == []
 
 
 def test_assistant_uses_nbest_when_available():

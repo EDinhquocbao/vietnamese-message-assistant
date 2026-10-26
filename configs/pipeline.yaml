@@ -1,5 +1,5 @@
 # Pipeline tích hợp: tin nhắn -> sửa lỗi -> sinh ứng viên diễn đạt lại -> lọc/xếp hạng (giai đoạn 5).
-correction_config: configs/correction.yaml     # model lấy từ output_dir trong config này
+correction_config: configs/correction_stage2.yaml  # model = output_dir (vit5-base-aug-ft); so sánh ở docs/improvement_plan.md
 paraphrase_config: configs/paraphrase.yaml
 
 ranker:
@@ -12,7 +12,7 @@ ranker:
   # Lọc NLI hai chiều (mục 7 docs/improvement_plan.md). min_entailment: null = tắt.
   # Ngưỡng chọn trên ViSP val bằng: python -m src.pipeline.calibrate_nli
   nli_model: MoritzLaurer/mDeBERTa-v3-base-xnli-multilingual-nli-2mil7
-  min_entailment: null
+  min_entailment: 0.17     # phân vị 10% trên ViSP val (90% câu người viết qua được), outputs/metrics/nli_calibration.json
 
 # Từ điển để phát hiện từ còn lỗi sau khi sửa (vd "nahu"); có từ lạ thì không hiện gợi ý diễn đạt.
 vocab:
