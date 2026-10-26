@@ -36,3 +36,26 @@ def test_make_noisy_leaves_numbers_and_punctuation():
     for seed in range(20):
         noisy, _ = make_noisy(s, random.Random(seed), max_errors=3)
         assert "150.000" in noisy and "7h30" in noisy
+
+
+def test_new_word_level_errors():
+    from src.data.augment_errors import double_char, strip_diacritics, telex_raw
+
+    assert strip_diacritics("Đường đi học") == "Duong di hoc"
+    assert telex_raw("đường") == "dduwowngf"
+    assert telex_raw("Tiếng") == "Tieengs"
+    assert double_char("đi", random.Random(0)) in {"đđi", "đii"}
+
+
+def test_fast_typing_noise_profile():
+    from src.data.augment_errors import make_fast_typing_noise, strip_diacritics
+
+    cfg = {"p_strip": 1.0, "p_strip_full": 1.0, "typo_counts": {0: 0, 1: 1}, "p_merge": 0.0, "p_clean": 0.0}
+    s = "tí nữa mình cùng nhau làm bài nhé"
+    noisy, types = make_fast_typing_noise(s, random.Random(3), cfg)
+    assert types[0] == "strip_full" and len(types) == 2
+    assert noisy != strip_diacritics(s) and noisy == strip_diacritics(noisy)  # có thêm lỗi gõ, không còn dấu
+    clean, t2 = make_fast_typing_noise(s, random.Random(3), {**cfg, "p_clean": 1.0})
+    assert clean == s and t2 == []
+    merged, t3 = make_fast_typing_noise(s, random.Random(1), {**cfg, "p_strip": 0.0, "typo_counts": {0: 1}, "p_merge": 1.0})
+    assert t3 == ["merge"] and len(merged.split()) == len(s.split()) - 1

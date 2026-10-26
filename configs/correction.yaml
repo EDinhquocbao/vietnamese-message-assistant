@@ -2,10 +2,10 @@
 seed: 42
 
 model_name: VietAI/vit5-base      # T5 tiếng Việt, ~226M tham số, vừa GPU 6 GB với bf16 + Adafactor
-output_dir: models/correction/vit5-base
+output_dir: models/correction/vit5-base-aug  # v1 (models/correction/vit5-base): train.jsonl, 3 epoch
 
 data:
-  train: data/processed/correction/train.jsonl   # gộp VSEC + ViLexNorm + VEC
+  train: data/processed/correction/train_aug.jsonl   # gộp VSEC + ViLexNorm + VEC + 89k lỗi nhân tạo (augment_errors)
   val: data/processed/correction/val.jsonl
   max_train_samples: null   # đặt số nhỏ (vd 2000) để chạy thử
   max_val_samples: 2000     # val loss tính trên tập con cho nhanh
@@ -13,7 +13,7 @@ data:
   max_target_len: 128
 
 train:
-  epochs: 3
+  epochs: 2                 # 154k cặp (gấp 2,4 lần v1); val loss v1 đã chững từ epoch 2
   batch_size: 16
   grad_accum: 2             # batch hiệu dụng 32
   optim: adafactor          # trạng thái tối ưu nhỏ hơn AdamW nhiều, hợp với T5 và 6 GB VRAM

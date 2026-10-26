@@ -26,3 +26,17 @@ def test_load_pairs_samples_reproducibly(tmp_path):
     a, b = load_pairs(p, max_samples=3, seed=1), load_pairs(p, max_samples=3, seed=1)
     assert len(a) == 3 and a.source.tolist() == b.source.tolist()
     assert len(load_pairs(p)) == 8
+
+
+def test_stress_inputs_are_reproducible_and_noisy(tmp_path):
+    from src.correction.stress_test import CATEGORIES, build_inputs, score
+
+    p = tmp_path / "t.jsonl"
+    sents = ["hôm nay mình đi học sớm nhé bạn", "tối nay cả nhóm cùng nhau làm bài", "mai trời mưa to lắm đó"]
+    pd.DataFrame({"source": sents, "target": sents}).to_json(p, orient="records", lines=True, force_ascii=False)
+    a, b = build_inputs(p, 3), build_inputs(p, 3)
+    assert a.equals(b) and set(a.category) == set(CATEGORIES)
+    noisy = a[a.category != "cau_dung"]
+    assert (noisy.input != noisy.target).all()
+    s = score(a.assign(pred=a.target))
+    assert all(v["exact_match"] == 1.0 and v["wer"] == 0.0 for v in s.values())

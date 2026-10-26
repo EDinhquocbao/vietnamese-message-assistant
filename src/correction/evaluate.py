@@ -36,17 +36,17 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--data", default="data/processed/vsec/test.jsonl")
     ap.add_argument("--baseline", choices=sorted(BASELINES), default="copy")
-    ap.add_argument("--model", default=None, help="thư mục mô hình đã fine-tune (thay cho --baseline)")
+    ap.add_argument("--model", default=None, help="thư mục mô hình đã fine-tune hoặc tên mô hình trên Hub (thay cho --baseline)")
     ap.add_argument("--out_dir", default="outputs/metrics")
     args = ap.parse_args()
 
     df = pd.read_json(args.data, lines=True)
     tag = f"{Path(args.data).parent.name}_{Path(args.data).stem}"
     if args.model:
-        from src.correction.predict import from_config
+        from src.correction.predict import load_any
 
         system = Path(args.model).name
-        report, preds = evaluate(df, from_config(args.model), return_preds=True)
+        report, preds = evaluate(df, load_any(args.model), return_preds=True)
         pred_path = Path("outputs/predictions") / f"correction_{tag}_{system}.jsonl"
         pred_path.parent.mkdir(parents=True, exist_ok=True)
         df.assign(pred=preds).to_json(pred_path, orient="records", lines=True, force_ascii=False)

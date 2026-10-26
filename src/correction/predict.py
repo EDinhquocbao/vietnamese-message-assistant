@@ -11,6 +11,7 @@ Chạy:  python -m src.correction.predict --model models/correction/vit5-base "M
 """
 import argparse
 import sys
+from pathlib import Path
 
 import torch
 from transformers import AutoModelForSeq2SeqLM
@@ -63,6 +64,44 @@ class Corrector:
 
     def __call__(self, texts: list[str]) -> list[str]:
         return [c[0] for c in self.generate_many(texts, num_beams=self.num_beams)]
+
+
+class HubCorrector:
+    """Mô hình sửa lỗi bất kỳ trên Hugging Face Hub (vd bmd1905/vietnamese-correction-v2, BARTpho) để so sánh.
+    Tokenizer chậm (không có offset) nên không khôi phục <unk>."""
+
+    def __init__(self, name: str, num_beams: int = 4, batch_size: int = 16, max_new_tokens: int = 160,
+                 device: str | None = None):
+        from transformers import AutoTokenizer
+
+        self.device = device or ("cuda" if torch.cuda.is_available() else "cpu")
+        self.tok = AutoTokenizer.from_pretrained(name)
+        dtype = torch.bfloat16 if self.device == "cuda" else torch.float32
+        self.model = AutoModelForSeq2SeqLM.from_pretrained(name, dtype=dtype).to(self.device).eval()
+        self.num_beams, self.batch_size, self.max_new_tokens = num_beams, batch_size, max_new_tokens
+
+    @torch.no_grad()
+    def __call__(self, texts: list[str]) -> list[str]:
+        texts = [normalize_text(t) for t in texts]
+        order = sorted(range(len(texts)), key=lambda i: len(texts[i]))
+        out = [""] * len(texts)
+        for k in range(0, len(order), self.batch_size):
+            idx = order[k:k + self.batch_size]
+            enc = self.tok([texts[i] for i in idx], return_tensors="pt", padding=True).to(self.device)
+            gen = self.model.generate(**enc, num_beams=self.num_beams, max_new_tokens=self.max_new_tokens)
+            for i, d in zip(idx, self.tok.batch_decode(gen, skip_special_tokens=True)):
+                out[i] = normalize_text(d)
+        return out
+
+
+def load_any(name: str, config: str = "configs/correction.yaml"):
+    """'copy' -> baseline chép đầu vào; thư mục mô hình đã fine-tune -> Corrector; còn lại -> HubCorrector."""
+    if name == "copy":
+        return lambda texts: list(texts)
+    if Path(name).is_dir():
+        return from_config(name, config)
+    g = load_config(config)["generate"]
+    return HubCorrector(name, num_beams=g["num_beams"], max_new_tokens=g["max_new_tokens"])
 
 
 def from_config(model_dir: str | None = None, config: str = "configs/correction.yaml") -> Corrector:

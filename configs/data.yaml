@@ -79,6 +79,13 @@ split:
 # Bù cho kiểu lỗi gõ phím/sai dấu mà dữ liệu thật thiếu (cùng->cùn, nhau->nahu, quên->quyên).
 augment:
   from_datasets: [vilexnorm, vec]   # câu chuẩn kiểu tin nhắn/bình luận
-  n_samples: 30000
+  n_samples: 90000                  # nhiều hơn số câu chuẩn -> một câu được dùng lại với lỗi khác
   min_words: 3
-  max_errors: 2                     # số từ bị gây lỗi mỗi câu: 1..max_errors
+  max_errors: 2                     # hồ sơ single: số từ bị gây lỗi mỗi câu 1..max_errors
+  profiles: {single: 0.25, fast_typing: 0.75}
+  fast_typing:
+    p_clean: 0.05                   # giữ nguyên câu (chống sửa quá tay)
+    p_strip: 0.6                    # bỏ dấu ...
+    p_strip_full: 0.7               # ... cả câu (còn lại: bỏ dấu ngẫu nhiên ~50% số từ)
+    typo_counts: {0: 0.2, 1: 0.4, 2: 0.3, 3: 0.1}   # số lỗi gõ chồng thêm
+    p_merge: 0.1                    # thiếu dấu cách giữa hai từ
