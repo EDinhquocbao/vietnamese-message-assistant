@@ -11,6 +11,7 @@ Chạy:  python -m src.correction.predict --model models/correction/vit5-base "M
 """
 import argparse
 import math
+import re
 import sys
 from pathlib import Path
 
@@ -28,6 +29,23 @@ def restore_unknown(text: str, spans: list[str], unk: str = "<unk>") -> str:
     for i, part in enumerate(parts[1:]):
         out += (spans[i] if i < len(spans) else "") + part
     return normalize_text(out)
+
+
+_SYMBOL_RUN = re.compile(r"([^\w\s])\1{2,}")  # một ký hiệu lặp >= 3 lần: "))))", "!!!"
+
+
+def restore_symbols(source: str, pred: str) -> str:
+    """Trả lại ký hiệu mà tokenizer chuẩn hóa mất: "…" bị đổi thành "...", và độ dài chuỗi ký hiệu
+    lặp ("=))))") mà mô hình hay sinh dài/ngắn hơn câu gốc. Chuỗi lặp được thay theo thứ tự xuất hiện."""
+    if "…" in source and "..." not in source:
+        pred = pred.replace("...", "…")
+    runs = iter(m.group() for m in _SYMBOL_RUN.finditer(source))
+
+    def fix(m):
+        r = next(runs, None)
+        return r if r is not None and r[0] == m.group()[0] else m.group()
+
+    return _SYMBOL_RUN.sub(fix, pred)
 
 
 class Corrector:
@@ -63,7 +81,7 @@ class Corrector:
                 spans = self._unk_spans(batch[j], enc["input_ids"][j].tolist(), offsets[j])
                 for d, sc in zip(decoded[j * n:(j + 1) * n], scores[j * n:(j + 1) * n]):
                     d = d.replace(self.tok.pad_token, "").replace(self.tok.eos_token, "")
-                    text = restore_unknown(d, spans, self.tok.unk_token)
+                    text = restore_symbols(batch[j], restore_unknown(d, spans, self.tok.unk_token))
                     out[i].append((text, sc) if with_scores else text)
         return out
 

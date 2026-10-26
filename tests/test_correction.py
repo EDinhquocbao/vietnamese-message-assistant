@@ -50,3 +50,12 @@ def test_merge_nbest_normalizes_and_merges():
     r = merge_nbest([("a", math.log(0.5)), ("b", math.log(0.25)), ("a", math.log(0.25))])
     assert [x["text"] for x in r] == ["a", "b"]
     assert abs(r[0]["prob"] - 0.75) < 1e-9 and abs(sum(x["prob"] for x in r) - 1) < 1e-9
+
+
+def test_restore_symbols_from_source():
+    from src.correction.predict import restore_symbols
+
+    assert restore_symbols("10 điểm… nhưng… k có", "10 điểm... nhưng... không có") == "10 điểm… nhưng… không có"
+    assert restore_symbols("high note =))))))", "high note =))))))))))))") == "high note =))))))"
+    assert restore_symbols("đẹp quá...", "đẹp quá...") == "đẹp quá..."      # nguồn dùng "..." thì giữ
+    assert restore_symbols("ok :))", "ok :)) nha") == "ok :)) nha"
