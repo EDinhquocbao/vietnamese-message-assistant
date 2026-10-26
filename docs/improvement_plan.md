@@ -78,3 +78,26 @@ Hai câu người dùng thử: "tí nữa mìn cùn nahu làm bài nhé" sửa �
 
 
 Đã cập nhật mục 14.9–14.13 trong file plan .docx.
+
+## Vòng 3: cho người dùng chọn 1 trong tối đa 3 phương án sửa (demo)
+
+Từ log demo: câu đúng ý người dùng không phải lúc nào cũng là phương án đầu ("nagyf mai…" -> đúng ở #3,
+"…đau nhs" -> người dùng chọn #3 "đâu nhé") nhưng có trong danh sách. Demo hiện ô chọn khi mô hình không chắc,
+gợi ý diễn đạt tính lại theo câu được chọn. Xác suất hiển thị dùng log-prob cả câu (trung bình theo token cho
+27/25/25/24%, vô nghĩa); thứ tự giữ theo beam để phương án đầu = kết quả đã đánh giá.
+
+Đo tự động (`top_options`, đúng các phương án demo hiển thị): câu đúng ở phương án đầu / nằm trong top-3.
+
+| Kiểu lỗi (stress test) | v1 | v2 + GĐ2 (đang dùng) |
+|---|---|---|
+| Câu đã đúng | 90,0% / 93,0% | 87,0% / 92,5% |
+| Không dấu cả câu | 23,8% / 36,8% | 45,8% / 59,5% |
+| Đảo chữ | 34,8% / 43,0% | 68,2% / 78,8% |
+| Bấm hụt | 22,2% / 27,5% | 42,0% / 50,7% |
+| Phím bên cạnh | 30,0% / 40,0% | 58,2% / 68,2% |
+| Phím đúp | 68,8% / 75,2% | 80,2% / 89,8% |
+| Sai dấu | 24,8% / 33,0% | 58,2% / 69,8% |
+| Gõ nhanh | 6,5% / 10,2% | 26,5% / 36,8% |
+
+Tập test thật (phương án đầu / top-3): ViLexNorm v1 69,8% / 76,6%, v2+GĐ2 68,4% / 76,5%;
+VSEC v1 67,7% / 76,3%, v2+GĐ2 70,1% / 78,2%; VEC v2+GĐ2 52,6% / 60,4%.
