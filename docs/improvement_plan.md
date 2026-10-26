@@ -30,6 +30,12 @@ Trạng thái: ✅ xong · 🔄 đang làm · ⏳ chưa làm · 💤 để sau (
 | 11 | Quy tắc phủ định chặn nhầm phủ định kép ("Đừng quên" ⇔ "Nhớ") | 💤 | phát hiện khi viết test NLI; có thể bỏ quy tắc khi NLI đã bật |
 | 12 | Phát hiện đảo vai (ai làm gì cho ai) trong gợi ý | 💤 | cả embedding lẫn NLI đều bỏ sót; cần quy tắc theo đại từ hoặc mô hình khác |
 | 13 | Giảm sửa quá tay của v2+GĐ2 (xóa từ lặp hợp lệ, đổi tên riêng); thử giảm tỉ lệ lỗi "phím đúp"/tăng p_clean | 💤 | |
+| 14 | **[Ưu tiên 1]** Trả lời RQ3 tự động: diễn đạt lại thẳng câu lỗi vs sửa lỗi rồi mới diễn đạt (dùng đầu vào stress test, so với câu chuẩn bằng similarity/NLI/self-BLEU) | ⏳ | ~30 phút, không cần huấn luyện |
+| 15 | **[Ưu tiên 1]** Hình và bảng cho báo cáo: điền 3 notebook trống (độ dài câu, phân bố kiểu lỗi, đường loss các lần train, cột stress test top-1/top-3) + bảng 20 lỗi tiêu biểu có phân loại (viết tắt mơ hồ, sai thành từ có thật, sửa quá tay, lỗi nhãn, mất nội dung) | ⏳ | MVP yêu cầu phân tích 10–20 lỗi; ví dụ đã rải rác trong file này và mục 14 |
+| 16 | **[Ưu tiên 2]** Huấn luyện thêm 1–2 epoch mô hình diễn đạt lại (#10) rồi đo lại ViSP + tập tích hợp | ⏳ | ~50 phút GPU; chạy cùng lúc với #15 được (CPU), không cùng lúc với #14 (cần GPU suy luận) |
+| 17 | **[Ưu tiên 3]** Đánh giá thủ công: chuẩn bị file + rubric 0/1 (giữ nghĩa, tự nhiên, không thêm/bỏ ý) cho 50–100 gợi ý; NGƯỜI DÙNG chấm (~1 giờ); tính Top-1/Top-3 chấp nhận | ⏳ | thiếu lớn nhất: chỉ số tự động đã được chứng minh là không đủ cho diễn đạt lại |
+| 18 | Duyệt tập kiểm thử tích hợp (41 câu `status=draft`) hoặc ghi rõ trong báo cáo là chỉ tham khảo | ⏳ | người dùng quyết định |
+| 19 | Viết báo cáo + slide từ mục 14 file plan và các kết quả trên | ⏳ | làm sau cùng |
 
 ## Kết quả vòng 1 (26/10/2026)
 
@@ -101,3 +107,25 @@ gợi ý diễn đạt tính lại theo câu được chọn. Xác suất hiển
 
 Tập test thật (phương án đầu / top-3): ViLexNorm v1 69,8% / 76,6%, v2+GĐ2 68,4% / 76,5%;
 VSEC v1 67,7% / 76,3%, v2+GĐ2 70,1% / 78,2%; VEC v2+GĐ2 52,6% / 60,4%.
+
+## Đánh giá mức sẵn sàng cho báo cáo (26/10/2026, sau khi gộp mọi thứ vào `main`)
+
+Kết luận: phần kỹ thuật đạt MVP (mục 11 file plan) và có nhiều điểm cộng, nhưng CHƯA sẵn sàng viết báo cáo.
+
+| Tiêu chí MVP | Tình trạng |
+|---|---|
+| Mô hình sửa lỗi có kết quả test | ✅ 3 tập test thật + stress test 8 kiểu lỗi (top-1/top-3) |
+| Mô hình/baseline diễn đạt lại từ ViSP | ✅ |
+| Pipeline hai bước chạy trên câu mới | ✅ |
+| So sánh baseline, chỉ số phù hợp | ✅ |
+| Phân tích 10–20 lỗi tiêu biểu | ⚠️ có ví dụ rải rác, chưa thành bảng có phân loại (#15) |
+| Demo | ✅ có chọn 1 trong 3 phương án sửa |
+| Báo cáo | ❌ chưa viết (#19); tư liệu ở mục 14.1–14.15 file plan |
+
+Điểm mạnh nên nhấn mạnh trong báo cáo: quy trình chống rò rỉ chặt (test riêng từng dataset, ngưỡng NLI chọn trên
+val), các phát hiện thật (BLEU thưởng việc chép câu gốc; VEC chứa 83% ViLexNorm; lỗi nhân tạo giúp lỗi gõ nhưng
+gây sửa hăng, giai đoạn 2 khắc phục; mô hình có sẵn không chuyển sang miền tin nhắn), cải tiến xuất phát từ
+phân tích lỗi demo.
+
+Thứ tự làm tiếp đã thống nhất với người dùng: #14 + #15 (tự làm được) → #16 (GPU) → #17 (chuẩn bị file, người
+dùng chấm) → #18 → #19. Sau #14–#17 là đủ chắc để viết báo cáo.
