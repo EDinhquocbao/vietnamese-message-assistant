@@ -1,0 +1,36 @@
+# Fine-tune mô hình diễn đạt lại trên ViSP (giai đoạn 4). Cùng schema với configs/correction.yaml.
+seed: 42
+
+model_name: VietAI/vit5-base
+output_dir: models/paraphrase/vit5-base
+
+data:
+  train: data/processed/visp/train.jsonl   # 2 cặp/cụm; các câu còn lại của cụm nằm ở cột references
+  val: data/processed/visp/val.jsonl
+  max_train_samples: null
+  max_val_samples: 2000
+  max_source_len: 128
+  max_target_len: 128
+
+train:
+  epochs: 3
+  batch_size: 16
+  grad_accum: 2
+  optim: adafactor
+  learning_rate: 5.0e-4
+  warmup_ratio: 0.03
+  weight_decay: 0.0
+  bf16: true
+  gradient_checkpointing: true
+  eval_steps: 1000
+  logging_steps: 100
+  save_total_limit: 2
+
+generate:
+  # Sinh nhiều ứng viên rồi lọc/xếp hạng (src/pipeline/ranker.py) để còn 2-3 gợi ý.
+  num_candidates: 8
+  num_beams: 8              # nửa ứng viên từ beam search (an toàn, sát nghĩa)
+  top_p: 0.9                # nửa còn lại lấy mẫu nucleus (đa dạng hơn)
+  temperature: 1.0
+  batch_size: 16
+  max_new_tokens: 160

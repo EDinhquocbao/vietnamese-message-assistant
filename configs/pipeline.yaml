@@ -1,0 +1,11 @@
+# Pipeline tích hợp: tin nhắn -> sửa lỗi -> sinh ứng viên diễn đạt lại -> lọc/xếp hạng (giai đoạn 5).
+correction_config: configs/correction.yaml     # model lấy từ output_dir trong config này
+paraphrase_config: configs/paraphrase.yaml
+
+ranker:
+  model_name: sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2
+  top_k: 3                 # số gợi ý tối đa; có thể ít hơn nếu không đủ ứng viên an toàn
+  min_similarity: 0.8      # cosine tối thiểu với câu đã sửa
+  max_overlap: 0.9         # trùng từ > ngưỡng này = gần như chép lại
+  diversity_weight: 0.3
+  redundancy_weight: 0.5

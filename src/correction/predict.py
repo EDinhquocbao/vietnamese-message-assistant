@@ -41,23 +41,28 @@ class Corrector:
         return [text[a:b].strip() for i, (a, b) in zip(ids, offsets) if i == self.tok.unk_token_id]
 
     @torch.no_grad()
-    def __call__(self, texts: list[str]) -> list[str]:
+    def generate_many(self, texts: list[str], n: int = 1, **gen_kwargs) -> list[list[str]]:
+        """Sinh `n` câu cho mỗi câu đầu vào (gen_kwargs truyền thẳng cho model.generate)."""
         texts = [normalize_text(t) for t in texts]
         order = sorted(range(len(texts)), key=lambda i: len(texts[i]))  # gom câu cùng độ dài, ít padding
-        out = [""] * len(texts)
+        out = [[] for _ in texts]
         for k in range(0, len(order), self.batch_size):
             idx = order[k:k + self.batch_size]
             batch = [texts[i] for i in idx]
             enc = self.tok(batch, return_offsets_mapping=True, padding=True, return_tensors="pt")
             offsets = enc.pop("offset_mapping").tolist()
-            gen = self.model.generate(**enc.to(self.device), num_beams=self.num_beams,
-                                      max_new_tokens=self.max_new_tokens)
+            gen = self.model.generate(**enc.to(self.device), num_return_sequences=n,
+                                      max_new_tokens=self.max_new_tokens, **gen_kwargs)
             decoded = self.tok.batch_decode(gen, skip_special_tokens=False)
             for j, i in enumerate(idx):
-                d = decoded[j].replace(self.tok.pad_token, "").replace(self.tok.eos_token, "")
                 spans = self._unk_spans(batch[j], enc["input_ids"][j].tolist(), offsets[j])
-                out[i] = restore_unknown(d, spans, self.tok.unk_token)
+                for d in decoded[j * n:(j + 1) * n]:
+                    d = d.replace(self.tok.pad_token, "").replace(self.tok.eos_token, "")
+                    out[i].append(restore_unknown(d, spans, self.tok.unk_token))
         return out
+
+    def __call__(self, texts: list[str]) -> list[str]:
+        return [c[0] for c in self.generate_many(texts, num_beams=self.num_beams)]
 
 
 def from_config(model_dir: str | None = None, config: str = "configs/correction.yaml") -> Corrector:

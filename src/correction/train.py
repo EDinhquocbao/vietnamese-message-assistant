@@ -1,5 +1,7 @@
 """Fine-tune mô hình seq2seq sửa lỗi trên tập gộp data/processed/correction/.
 
+Dùng chung cho diễn đạt lại (src.paraphrase.train gọi main với configs/paraphrase.yaml).
+
 Chạy:  python -m src.correction.train                                   (theo configs/correction.yaml)
        python -m src.correction.train --max_train_samples 2000 --epochs 1 --output_dir models/correction/smoke
 Mô hình tốt nhất (theo val loss) được lưu ở output_dir, kèm train_summary.json.
@@ -19,9 +21,9 @@ from src.utils.seed import set_seed
 from src.utils.text_utils import load_config
 
 
-def main():
+def main(default_config: str = "configs/correction.yaml"):
     ap = argparse.ArgumentParser()
-    ap.add_argument("--config", default="configs/correction.yaml")
+    ap.add_argument("--config", default=default_config)
     ap.add_argument("--max_train_samples", type=int, default=None)
     ap.add_argument("--epochs", type=float, default=None)
     ap.add_argument("--output_dir", default=None)
