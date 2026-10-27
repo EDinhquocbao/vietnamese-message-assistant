@@ -33,8 +33,8 @@ Trạng thái: ✅ xong · 🔄 đang làm · ⏳ chưa làm · 💤 để sau (
 | 14 | **[Ưu tiên 1]** Trả lời RQ3 tự động: diễn đạt lại thẳng câu lỗi vs sửa lỗi rồi mới diễn đạt (dùng đầu vào stress test, so với câu chuẩn bằng similarity/NLI/self-BLEU) | ✅ | `src/pipeline/rq3.py`; sửa trước rồi diễn đạt tốt hơn hẳn, xem "Vòng 4" |
 | 15 | **[Ưu tiên 1]** Hình và bảng cho báo cáo: điền 3 notebook trống (độ dài câu, phân bố kiểu lỗi, đường loss các lần train, cột stress test top-1/top-3) + bảng 20 lỗi tiêu biểu có phân loại (viết tắt mơ hồ, sai thành từ có thật, sửa quá tay, lỗi nhãn, mất nội dung) | ✅ | 3 notebook đã chạy; 9 hình `reports/figures/`, bảng `reports/tables/` (20 lỗi: `03_error_examples.md`) |
 | 16 | **[Ưu tiên 2]** Huấn luyện thêm 1–2 epoch mô hình diễn đạt lại (#10) rồi đo lại ViSP + tập tích hợp | ✅ | Đã thử +2 epoch: val loss TĂNG 1,09 -> 1,20, giữ mô hình cũ; xem "Vòng 5" |
-| 17 | **[Ưu tiên 3]** Đánh giá thủ công: chuẩn bị file + rubric 0/1 (giữ nghĩa, tự nhiên, không thêm/bỏ ý) cho 50–100 gợi ý; NGƯỜI DÙNG chấm (~1 giờ); tính Top-1/Top-3 chấp nhận | 🔄 | File đã sẵn sàng: `reports/manual_eval/danh_gia_thu_cong.xlsx` (40 tin nhắn ViLexNorm, 85 gợi ý); chờ NGƯỜI DÙNG chấm, rồi `python -m src.pipeline.manual_eval score` |
-| 18 | Duyệt tập kiểm thử tích hợp (41 câu `status=draft`) hoặc ghi rõ trong báo cáo là chỉ tham khảo | 🔄 | Cùng file Excel, sheet 'Duyệt tập kiểm thử' (Giữ/Sửa/Bỏ); `score` tự áp vào CSV |
+| 17 | **[Ưu tiên 3]** Đánh giá thủ công: chuẩn bị file + rubric 0/1 (giữ nghĩa, tự nhiên, không thêm/bỏ ý) cho 50–100 gợi ý; NGƯỜI DÙNG chấm (~1 giờ); tính Top-1/Top-3 chấp nhận | ✅ | Người dùng chấm 85 gợi ý: Top-1 35%, Top-3 52,5%; chấm tự động cho đạt 87% -> không tin được, xem "Vòng 6" |
+| 18 | Duyệt tập kiểm thử tích hợp (41 câu `status=draft`) hoặc ghi rõ trong báo cáo là chỉ tham khảo | ✅ | Người dùng giữ cả 41 câu -> `status=approved`; kết quả tích hợp không đổi (EM 87,8%) |
 | 19 | Viết báo cáo + slide từ mục 14 file plan và các kết quả trên | ⏳ | làm sau cùng |
 
 ## Kết quả vòng 1 (26/10/2026)
@@ -199,3 +199,41 @@ không tự nhiên, còn lỗi, khác). `score` tính Top-1 (gợi ý đầu đ�
 gợi ý và phân bố lý do -> `outputs/metrics/manual_eval.json`; đồng thời áp quyết định duyệt vào
 `data/test/integration_test.csv` (Giữ/Sửa -> approved, Bỏ -> xóa). Sau đó chạy lại
 `python -m src.pipeline.evaluate_integration` (không cần `--include_draft`).
+
+### Kết quả chấm thủ công (27/10/2026)
+
+Người dùng chấm đủ 85 gợi ý của 40 tin nhắn (`python -m src.pipeline.manual_eval score` -> `outputs/metrics/manual_eval.json`).
+Lý do được ghi tự do; Claude gom thành nhóm trong `reports/manual_eval/ly_do_phan_loai.csv` (giữ nguyên câu gốc).
+
+| | Số tin nhắn | Top-1 (gợi ý đầu đạt) | Top-3 (≥1 gợi ý đạt) | Tỉ lệ đạt mỗi gợi ý |
+|---|---|---|---|---|
+| Tất cả | 40 | **35,0%** | **52,5%** | 34,1% |
+| Bước sửa lỗi đúng hoàn toàn | 31 | 38,7% | 61,3% | 40,9% |
+| Bước sửa lỗi sai | 9 | 22,2% | 22,2% | 10,5% |
+
+Tỉ lệ đạt theo vị trí gợi ý: #1 35%, #2 25%, #3 47% -> thứ tự xếp hạng không phản ánh chất lượng.
+
+| Lý do bị chấm 0 (56 gợi ý) | Số |
+|---|---|
+| Lạc ý/không liên quan | 23 |
+| Vô nghĩa, lủng củng, sai ngữ pháp | 19 |
+| Đổi chủ ngữ/đối tượng (đảo vai) | 5 |
+| Đổi kiểu câu/sắc thái (thành câu hỏi, thêm "!", mất từ cảm xúc) | 4 |
+| Thêm hoặc bỏ ý | 4 |
+| Sai từ do bước sửa lỗi | 1 |
+
+**So với chấm tự động trên đúng 85 gợi ý này** (cosine ≥ 0,8 và NLI ≥ 0,17 so với câu chuẩn, như RQ3;
+`outputs/metrics/manual_vs_auto.json`): tự động cho đạt 87,1%, người chỉ 34,1%; hai bên khớp 44,7%; trong số gợi ý
+tự động cho đạt, người chỉ chấp nhận 37,8%. Tương quan Spearman với điểm người: cosine 0,27, NLI 0,14.
+
+Nhận xét:
+- Đây là kết quả quan trọng nhất cho báo cáo: **chỉ số tự động (embedding, NLI) đánh giá quá cao diễn đạt lại gấp
+  khoảng 2,5 lần** trên tin nhắn MXH; các con số RQ3 (#14) chỉ dùng để so sánh tương đối giữa hai cách, không phải
+  chất lượng tuyệt đối. Kết luận RQ3 vẫn đứng vững (hướng giống: sửa sai -> gợi ý đạt 22% so với 39% khi sửa đúng).
+- Mô hình diễn đạt lại học trên ViSP (văn bản tin tức/chuẩn, câu dài trung vị 28 từ) không hợp với tin nhắn ngắn,
+  văn nói, nhiều tiếng lóng: lỗi chính là lạc ý và câu vô nghĩa, không phải lỗi nhỏ. Hướng cải thiện đúng là #8
+  (dữ liệu diễn đạt lại kiểu tin nhắn) chứ không phải huấn luyện thêm (#16 đã cho thấy không giúp).
+- Bộ lọc NLI/embedding gần như không lọc được các lỗi này -> cân nhắc cho phép demo không đưa gợi ý khi không chắc,
+  hoặc ưu tiên gợi ý gần câu gốc hơn.
+- Người chấm nhận xét thêm: khi 3 gợi ý cùng nghĩa thì đưa 3 câu là thừa (M31).
+- Giới hạn: một người chấm, 40 tin nhắn; không có độ đồng thuận giữa người chấm.

@@ -1,0 +1,57 @@
+﻿Mã câu,Gợi ý số,Lý do của người chấm,Nhóm lý do
+M01,1,đổi thành câu hỏi,Đổi kiểu câu/sắc thái
+M01,2,tự ý thêm thực thể vào 1 tin nhắn hơi trừu tượng,Thêm hoặc bỏ ý
+M02,1,"đổi hoàn toán ý câu, với lại thường không ai dùng từ nhô cả nên từ này đáng lẽ không nên có trong gợi ý",Lạc ý/không liên quan
+M02,2,đọc không hiểu gì cả,"Vô nghĩa, lủng củng, sai ngữ pháp"
+M02,3,hoàn toàn không phù hợp ý nào trong ý người viết cả,Lạc ý/không liên quan
+M03,1,câu này lủng củng quá mặc dù có một xíu ý của người viết,"Vô nghĩa, lủng củng, sai ngữ pháp"
+M03,2,câu này chả có ý nghĩa gì cả,"Vô nghĩa, lủng củng, sai ngữ pháp"
+M04,1,câu này có ý đúng nhiều nhưng mà lại thêm hơi thừa từ ngữ làm câu về sau lại không đúng ý người gửi,Thêm hoặc bỏ ý
+M04,2,đoạn đầu đúng nè đoạn sau đọc không hiểu gì,"Vô nghĩa, lủng củng, sai ngữ pháp"
+M04,3,câu này ý sau lại đúng ý trước lại chệch hẳn,Lạc ý/không liên quan
+M05,1,câu này chả có ý nghĩa gì cả,"Vô nghĩa, lủng củng, sai ngữ pháp"
+M06,1,câu này dài quá rồi không có đúng ý tưởng,Thêm hoặc bỏ ý
+M08,1,"đánh lẽ ý trước là được rồi tự nhiên thêm ý sau dấu , làm câu nghe không tự nhiên",Thêm hoặc bỏ ý
+M09,1,câu gợi ý chả có liên quan gì luôn,Lạc ý/không liên quan
+M09,2,câu gợi ý chả có liên quan gì luôn,Lạc ý/không liên quan
+M09,3,câu gợi ý chả có liên quan gì luôn,Lạc ý/không liên quan
+M11,1,câu gợi ý chả có liên quan gì luôn,Lạc ý/không liên quan
+M13,1,câu gợi ý chả có liên quan gì luôn,Lạc ý/không liên quan
+M13,2,ý đầu rất ổn nhưng ý sau tự nhiên mất chủ ngữ vị ngữ,"Vô nghĩa, lủng củng, sai ngữ pháp"
+M14,1,câu này vô nghĩa,"Vô nghĩa, lủng củng, sai ngữ pháp"
+M15,1,câu gợi ý chả có liên quan gì luôn,Lạc ý/không liên quan
+M17,1,câu này ý đầu rất đúng nhưng sau chữ và thì lại cụt ngủn,"Vô nghĩa, lủng củng, sai ngữ pháp"
+M17,2,câu tào lao vô nghĩa,"Vô nghĩa, lủng củng, sai ngữ pháp"
+M18,1,câu này chả có ý nghĩa gì cả,"Vô nghĩa, lủng củng, sai ngữ pháp"
+M19,2,câu này hơi sai về ngữ pháp,"Vô nghĩa, lủng củng, sai ngữ pháp"
+M19,3,câu này đáng lẽ sẽ đúng nếu ý trước không cụt ngủn,"Vô nghĩa, lủng củng, sai ngữ pháp"
+M22,1,câu này có ý đúng nhưng hơi sai đối tượng,Đổi chủ ngữ/đối tượng (đảo vai)
+M22,2,câu này chả liên quan gì đến ý chính cả,Lạc ý/không liên quan
+M23,1,câu này chả có ý nghĩa gì cả,"Vô nghĩa, lủng củng, sai ngữ pháp"
+M23,2,câu này chả có ý nghĩa gì cả,"Vô nghĩa, lủng củng, sai ngữ pháp"
+M25,1,câu này sai hết ý nghĩa,Lạc ý/không liên quan
+M25,2,câu này sai hết ý nghĩa,Lạc ý/không liên quan
+M25,3,câu này vô nghĩa,"Vô nghĩa, lủng củng, sai ngữ pháp"
+M26,1,khá ổn nhưng mà hơi không phù hợp với ý chính lắm,Lạc ý/không liên quan
+M26,2,câu này tốt hơn câu trên nhưng vẫn sai ngữ pháp,"Vô nghĩa, lủng củng, sai ngữ pháp"
+M27,1,đổi cả chủ ngữ vị ngữ,Đổi chủ ngữ/đối tượng (đảo vai)
+M27,2,câu này rất ổn luôn nếu không sai chủ ngữ,Đổi chủ ngữ/đối tượng (đảo vai)
+M27,3,lại sai chủ ngữ,Đổi chủ ngữ/đối tượng (đảo vai)
+M28,2,lệch lạc ý nghĩa với ý chính,Lạc ý/không liên quan
+M28,3,câu này không liên quan gì đến ý chính cả,Lạc ý/không liên quan
+M29,1,"thật ra thì câu này không sai gì cả chỉ là sửa từ A->A' nó không đúng nhưng cũng gần như chép lại đang lẽ 2 từ cuối phải là ""như này""",Sai từ do bước sửa lỗi
+M30,1,câu gợi ý chả có liên quan gì luôn,Lạc ý/không liên quan
+M30,2,câu gợi ý chả có liên quan gì luôn,Lạc ý/không liên quan
+M33,1,câu này chả liên quan gì đến ý chính cả,Lạc ý/không liên quan
+M33,2,câu này chả liên quan gì đến ý chính cả,Lạc ý/không liên quan
+M35,1,câu này chỉ thiếu mấy câu cảm xúc thôi là ý nghĩa khác hẳn,Đổi kiểu câu/sắc thái
+M35,2,câu này giống câu trên thiếu vài câu mô tả cảm xúc,Đổi kiểu câu/sắc thái
+M36,1,câu này chả liên quan gì đến ý chính cả,Lạc ý/không liên quan
+M36,2,câu này chả liên quan gì đến ý chính cả,Lạc ý/không liên quan
+M36,3,câu này chả liên quan gì đến ý chính cả,Lạc ý/không liên quan
+M38,1,câu này vô nghĩa và lủng củng quá,"Vô nghĩa, lủng củng, sai ngữ pháp"
+M38,2,câu này vô nghĩa và chả có gì liên quan đến ý chính cả,"Vô nghĩa, lủng củng, sai ngữ pháp"
+M38,3,câu này sai chủ ngữ,Đổi chủ ngữ/đối tượng (đảo vai)
+M39,1,câu này chả có ý nghĩa gì cả,"Vô nghĩa, lủng củng, sai ngữ pháp"
+M39,2,câu này chả liên quan gì đến ý chính cả,Lạc ý/không liên quan
+M40,2,câu này thêm dấu ! Vào là sai hết ý rồi,Đổi kiểu câu/sắc thái

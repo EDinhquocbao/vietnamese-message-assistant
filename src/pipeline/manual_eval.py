@@ -4,7 +4,8 @@ prepare: chạy pipeline trên tin nhắn thật của ViLexNorm test (chọn ng
          -> reports/manual_eval/danh_gia_thu_cong.xlsx, gồm 3 sheet: Hướng dẫn, Chấm gợi ý (mỗi dòng một gợi ý,
          cột "Chấp nhận" 1/0 + lý do), Duyệt tập kiểm thử (41 câu draft, cột Quyết định: Giữ/Sửa/Bỏ).
          Không ghi đè file đã có (tránh mất phần người dùng đã chấm) trừ khi có --force.
-score:   đọc file đã điền -> Top-1/Top-3 chấp nhận, phân bố lý do (outputs/metrics/manual_eval.json + .md),
+score:   đọc file đã điền -> Top-1/Top-3 chấp nhận, theo vị trí gợi ý, tách theo bước sửa lỗi đúng/sai, phân bố lý do
+         (lý do ghi tự do được gom nhóm theo ly_do_phan_loai.csv) -> outputs/metrics/manual_eval.json,
          và áp quyết định duyệt vào data/test/integration_test.csv (Giữ/Sửa -> status=approved, Bỏ -> xóa dòng).
 
 Chạy:  python -m src.pipeline.manual_eval prepare [--n 40]
@@ -21,6 +22,7 @@ from src.utils.metrics import tokenize
 
 XLSX = Path("reports/manual_eval/danh_gia_thu_cong.xlsx")
 INTEGRATION = Path("data/test/integration_test.csv")
+REASON_CODES = XLSX.parent / "ly_do_phan_loai.csv"  # Mã câu, Gợi ý số, Lý do của người chấm, Nhóm lý do
 SEED = 2026
 REASONS = ["Sai/đổi nghĩa", "Thêm hoặc bỏ ý", "Đảo vai (ai làm gì cho ai)", "Không tự nhiên",
            "Còn lỗi chính tả/ngữ pháp", "Khác"]
@@ -87,6 +89,7 @@ def score_ratings(df: pd.DataFrame) -> dict:
         "top1_acceptance": float(per_msg.first().mean()) if n else None,
         "top3_acceptance": float((per_msg.max() == 1).mean()) if n else None,
         "suggestion_acceptance": float(rated.ok.mean()) if n else None,
+        "acceptance_by_position": {int(k): float(v) for k, v in rated.groupby("Gợi ý số").ok.mean().items()},
         "reasons": {k: int(v) for k, v in reasons.items()},
     }
 
@@ -98,7 +101,7 @@ def apply_review(cases: pd.DataFrame, review: pd.DataFrame) -> tuple[pd.DataFram
     drop = []
     for r in review.itertuples(index=False):
         idx = cases.index[cases.id == r.id]
-        decision = (r.decision or "").strip() if isinstance(r.decision, str) else ""
+        decision = r.decision.strip().capitalize() if isinstance(r.decision, str) else ""  # "giữ" -> "Giữ"
         if decision not in DECISIONS:
             counts["chưa duyệt"] += 1
             continue
@@ -199,8 +202,17 @@ def prepare(args):
 
 def score(args):
     ratings = pd.read_excel(XLSX, sheet_name="Chấm gợi ý")
-    meta = json.loads(pd.read_excel(XLSX, sheet_name="_meta", header=None).iloc[0, 1])
-    report = {"meta": meta, "ratings": score_ratings(ratings)}
+    hidden = pd.read_excel(XLSX, sheet_name="_meta", header=None)
+    meta = json.loads(hidden.iloc[0, 1])
+    ratings["_corrected"] = hidden.iloc[1:len(ratings) + 1, 0].tolist()
+    if REASON_CODES.exists():  # lý do ghi tự do -> nhóm lý do (phân loại thủ công, xem file)
+        codes = pd.read_csv(REASON_CODES).set_index(["Mã câu", "Gợi ý số"])["Nhóm lý do"]
+        keys = list(zip(ratings["Mã câu"], ratings["Gợi ý số"]))
+        ratings["Lý do (nếu 0)"] = [codes.get(k, r) for k, r in zip(keys, ratings["Lý do (nếu 0)"])]
+    correct = ratings._corrected == ratings["Ý người viết"]
+    report = {"meta": meta, "ratings": score_ratings(ratings),
+              "correction_exact": score_ratings(ratings[correct]),
+              "correction_wrong": score_ratings(ratings[~correct])}
 
     review = pd.read_excel(XLSX, sheet_name="Duyệt tập kiểm thử", dtype=str)
     review = review.rename(columns={"Mã": "id", "Quyết định": "decision", "Sửa câu đúng thành": "new_correction",

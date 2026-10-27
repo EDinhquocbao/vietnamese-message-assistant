@@ -202,7 +202,7 @@ def test_manual_eval_scoring_and_review():
 
     cases = pd.DataFrame({"id": ["A01", "A02", "A03", "A04"], "expected_correction": ["a", "b", "c", "d"],
                           "must_keep": ["", "8h", "", ""], "status": ["draft"] * 4})
-    review = pd.DataFrame({"id": ["A01", "A02", "A03", "A04"], "decision": ["Giữ", "Sửa", "Bỏ", None],
+    review = pd.DataFrame({"id": ["A01", "A02", "A03", "A04"], "decision": ["giữ ", "Sửa", "Bỏ", None],
                            "new_correction": [None, "bb", None, None], "new_must_keep": [None, "9h", None, None]})
     out, counts = apply_review(cases, review)
     assert list(out.id) == ["A01", "A02", "A04"]
