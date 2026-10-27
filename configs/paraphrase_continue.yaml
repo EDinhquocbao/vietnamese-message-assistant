@@ -1,0 +1,37 @@
+# Huấn luyện TIẾP mô hình diễn đạt lại (mục #16 docs/improvement_plan.md): sau 2 epoch val loss vẫn giảm
+# (1,155 -> 1,089), phần chững cuối là do lr giảm về 0. Khởi tạo từ mô hình 2 epoch, thêm 2 epoch với lr nhỏ hơn.
+# Chỉ thay mô hình trong configs/paraphrase.yaml nếu đo lại ViSP + tập tích hợp tốt hơn.
+seed: 42
+
+model_name: models/paraphrase/vit5-base   # mô hình 2 epoch (configs/paraphrase.yaml)
+output_dir: models/paraphrase/vit5-base-ep4
+
+data:
+  train: data/processed/visp/train.jsonl
+  val: data/processed/visp/val.jsonl
+  max_train_samples: null
+  max_val_samples: 2000
+  max_source_len: 128
+  max_target_len: 128
+
+train:
+  epochs: 2
+  batch_size: 16
+  grad_accum: 2
+  optim: adafactor
+  learning_rate: 2.0e-4     # nhỏ hơn lần đầu (5e-4) vì đang ở gần điểm tốt
+  warmup_ratio: 0.03
+  weight_decay: 0.0
+  bf16: true
+  gradient_checkpointing: true
+  eval_steps: 1000
+  logging_steps: 100
+  save_total_limit: 2
+
+generate:
+  num_candidates: 8
+  num_beams: 8
+  top_p: 0.9
+  temperature: 1.0
+  batch_size: 16
+  max_new_tokens: 160
