@@ -186,3 +186,27 @@ def test_rq3_judge_and_summarize():
     assert judged[1] == []
     s = summarize(pd.DataFrame({"judged": judged, "target": ["mai đi học"] * 2}))
     assert s["top1_ok"] == 0.5 and s["any_ok"] == 0.5 and s["has_suggestion"] == 0.5 and s["clean"] == 0.5
+
+
+def test_manual_eval_scoring_and_review():
+    import pandas as pd
+
+    from src.pipeline.manual_eval import apply_review, score_ratings
+
+    ratings = pd.DataFrame({"Mã câu": ["M01", "M01", "M02", "M02", "M03"], "Gợi ý số": [1, 2, 1, 2, 1],
+                            "Chấp nhận": [0, 1, 1, 0, None], "Lý do (nếu 0)": ["Đảo vai (ai làm gì cho ai)", None, None, None, None]})
+    s = score_ratings(ratings)
+    assert s["n_messages"] == 2 and s["n_incomplete"] == 1        # M03 chưa chấm
+    assert s["top1_acceptance"] == 0.5 and s["top3_acceptance"] == 1.0
+    assert s["reasons"] == {"Đảo vai (ai làm gì cho ai)": 1, "(không ghi)": 1}
+
+    cases = pd.DataFrame({"id": ["A01", "A02", "A03", "A04"], "expected_correction": ["a", "b", "c", "d"],
+                          "must_keep": ["", "8h", "", ""], "status": ["draft"] * 4})
+    review = pd.DataFrame({"id": ["A01", "A02", "A03", "A04"], "decision": ["giữ ", "Sửa", "Bỏ", None],
+                           "new_correction": [None, "bb", None, None], "new_must_keep": [None, "9h", None, None]})
+    out, counts = apply_review(cases, review)
+    assert list(out.id) == ["A01", "A02", "A04"]
+    assert list(out.status) == ["approved", "approved", "draft"]
+    assert out.set_index("id").loc["A02", "expected_correction"] == "bb"
+    assert out.set_index("id").loc["A02", "must_keep"] == "9h"
+    assert counts == {"Giữ": 1, "Sửa": 1, "Bỏ": 1, "chưa duyệt": 1}
