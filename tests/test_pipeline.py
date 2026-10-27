@@ -172,3 +172,17 @@ def test_assistant_suggest_for_chosen_option():
     s = a.suggest("ngy mai di hoc", "ngày mai đi học")
     assert s["corrected"] == "ngày mai đi học" and s["edits"]
     assert [x["text"] for x in s["suggestions"]] == ["Gợi ý cho: ngày mai đi học"]
+
+
+def test_rq3_judge_and_summarize():
+    import pandas as pd
+
+    from src.pipeline.rq3 import judge, summarize
+
+    r = Ranker(encode=_fake_encode, entail=lambda ps, hs: [0.9] * len(ps), min_similarity=0.8, min_entailment=0.17)
+    vocab = {"mai", "đi", "học", "nhé"}
+    judged = judge(r, vocab, ["mai đi học", "mai đi học"], [["mai đi học nhé", "mai di hoc"], []])
+    assert [j["ok"] for j in judged[0]] == [True, False]  # "di hoc" còn từ lạ -> không sạch
+    assert judged[1] == []
+    s = summarize(pd.DataFrame({"judged": judged, "target": ["mai đi học"] * 2}))
+    assert s["top1_ok"] == 0.5 and s["any_ok"] == 0.5 and s["has_suggestion"] == 0.5 and s["clean"] == 0.5

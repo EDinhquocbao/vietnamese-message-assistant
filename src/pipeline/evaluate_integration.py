@@ -54,6 +54,7 @@ def main():
     ap.add_argument("--config", default="configs/pipeline.yaml")
     ap.add_argument("--include_draft", action="store_true",
                     help="tính cả câu status=draft (chưa duyệt); kết quả chỉ để tham khảo")
+    ap.add_argument("--tag", default="", help="hậu tố tên file kết quả, vd '_para-ep4' khi đổi mô hình diễn đạt lại")
     args = ap.parse_args()
 
     df = pd.read_csv(args.data, dtype=str, keep_default_na=False)
@@ -66,9 +67,11 @@ def main():
     df = df.assign(corrected=[r["corrected"] for r in results],
                    suggestions=[[s["text"] for s in r["suggestions"]] for r in results])
 
-    corr_cfg = load_config(load_config(args.config)["correction_config"])
-    system = Path(corr_cfg["output_dir"]).name
-    report = {"system": system, "data": args.data, "include_draft": args.include_draft,
+    pipe_cfg = load_config(args.config)
+    corr_cfg = load_config(pipe_cfg["correction_config"])
+    system = Path(corr_cfg["output_dir"]).name + args.tag
+    report = {"system": system, "paraphrase_model": load_config(pipe_cfg["paraphrase_config"])["output_dir"],
+              "data": args.data, "include_draft": args.include_draft,
               "all": group_metrics(df), "by_group": {g: group_metrics(part) for g, part in df.groupby("group")}}
     out = Path("outputs/metrics") / f"integration_{system}.json"
     out.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
