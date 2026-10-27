@@ -8,6 +8,7 @@ scikit-learn
 pandas
 numpy
 matplotlib
+tabulate                # DataFrame.to_markdown trong notebook báo cáo
 seaborn
 PyYAML
 tqdm

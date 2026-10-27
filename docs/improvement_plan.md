@@ -26,13 +26,13 @@ Trạng thái: ✅ xong · 🔄 đang làm · ⏳ chưa làm · 💤 để sau (
 | 7 | Lọc nghĩa gợi ý bằng NLI hai chiều (mDeBERTa-v3 XNLI, MIT) | ✅ | Ngưỡng 0,17 = phân vị 10% trên ViSP val (`calibrate_nli`). Thử tay: chặn được "Không nên mua sữa" (0,02) nhưng KHÔNG chặn được đảo vai "em gửi chị" -> "chị gửi em" (0,98) |
 | 8 | Diễn đạt lại theo văn phong tin nhắn (dữ liệu sinh bằng LLM hoặc LLM nhỏ dùng prompt) | 💤 | tốn công nhất; đưa vào "hướng phát triển" |
 | 9 | Hậu xử lý ký tự bị tokenizer chuẩn hóa ("…" -> "...", số lượng ")" trong "=))") | ✅ | `restore_symbols`; ViLexNorm v1: EM 69,1% -> 69,8%, WER 3,96% -> 3,72% |
-| 10 | Huấn luyện thêm epoch cho mô hình diễn đạt lại (val loss còn giảm ở epoch 2) | 💤 | |
+| 10 | Huấn luyện thêm epoch cho mô hình diễn đạt lại (val loss còn giảm ở epoch 2) | ✅ | làm ở #16, không cải thiện |
 | 11 | Quy tắc phủ định chặn nhầm phủ định kép ("Đừng quên" ⇔ "Nhớ") | 💤 | phát hiện khi viết test NLI; có thể bỏ quy tắc khi NLI đã bật |
 | 12 | Phát hiện đảo vai (ai làm gì cho ai) trong gợi ý | 💤 | cả embedding lẫn NLI đều bỏ sót; cần quy tắc theo đại từ hoặc mô hình khác |
 | 13 | Giảm sửa quá tay của v2+GĐ2 (xóa từ lặp hợp lệ, đổi tên riêng); thử giảm tỉ lệ lỗi "phím đúp"/tăng p_clean | 💤 | |
-| 14 | **[Ưu tiên 1]** Trả lời RQ3 tự động: diễn đạt lại thẳng câu lỗi vs sửa lỗi rồi mới diễn đạt (dùng đầu vào stress test, so với câu chuẩn bằng similarity/NLI/self-BLEU) | ⏳ | ~30 phút, không cần huấn luyện |
-| 15 | **[Ưu tiên 1]** Hình và bảng cho báo cáo: điền 3 notebook trống (độ dài câu, phân bố kiểu lỗi, đường loss các lần train, cột stress test top-1/top-3) + bảng 20 lỗi tiêu biểu có phân loại (viết tắt mơ hồ, sai thành từ có thật, sửa quá tay, lỗi nhãn, mất nội dung) | ⏳ | MVP yêu cầu phân tích 10–20 lỗi; ví dụ đã rải rác trong file này và mục 14 |
-| 16 | **[Ưu tiên 2]** Huấn luyện thêm 1–2 epoch mô hình diễn đạt lại (#10) rồi đo lại ViSP + tập tích hợp | ⏳ | ~50 phút GPU; chạy cùng lúc với #15 được (CPU), không cùng lúc với #14 (cần GPU suy luận) |
+| 14 | **[Ưu tiên 1]** Trả lời RQ3 tự động: diễn đạt lại thẳng câu lỗi vs sửa lỗi rồi mới diễn đạt (dùng đầu vào stress test, so với câu chuẩn bằng similarity/NLI/self-BLEU) | ✅ | `src/pipeline/rq3.py`; sửa trước rồi diễn đạt tốt hơn hẳn, xem "Vòng 4" |
+| 15 | **[Ưu tiên 1]** Hình và bảng cho báo cáo: điền 3 notebook trống (độ dài câu, phân bố kiểu lỗi, đường loss các lần train, cột stress test top-1/top-3) + bảng 20 lỗi tiêu biểu có phân loại (viết tắt mơ hồ, sai thành từ có thật, sửa quá tay, lỗi nhãn, mất nội dung) | ✅ | 3 notebook đã chạy; 9 hình `reports/figures/`, bảng `reports/tables/` (20 lỗi: `03_error_examples.md`) |
+| 16 | **[Ưu tiên 2]** Huấn luyện thêm 1–2 epoch mô hình diễn đạt lại (#10) rồi đo lại ViSP + tập tích hợp | ✅ | Đã thử +2 epoch: val loss TĂNG 1,09 -> 1,20, giữ mô hình cũ; xem "Vòng 5" |
 | 17 | **[Ưu tiên 3]** Đánh giá thủ công: chuẩn bị file + rubric 0/1 (giữ nghĩa, tự nhiên, không thêm/bỏ ý) cho 50–100 gợi ý; NGƯỜI DÙNG chấm (~1 giờ); tính Top-1/Top-3 chấp nhận | ⏳ | thiếu lớn nhất: chỉ số tự động đã được chứng minh là không đủ cho diễn đạt lại |
 | 18 | Duyệt tập kiểm thử tích hợp (41 câu `status=draft`) hoặc ghi rõ trong báo cáo là chỉ tham khảo | ⏳ | người dùng quyết định |
 | 19 | Viết báo cáo + slide từ mục 14 file plan và các kết quả trên | ⏳ | làm sau cùng |
@@ -129,3 +129,61 @@ phân tích lỗi demo.
 
 Thứ tự làm tiếp đã thống nhất với người dùng: #14 + #15 (tự làm được) → #16 (GPU) → #17 (chuẩn bị file, người
 dùng chấm) → #18 → #19. Sau #14–#17 là đủ chắc để viết báo cáo.
+
+## Vòng 4: RQ3 — diễn đạt thẳng câu lỗi hay sửa lỗi trước? (27/10/2026)
+
+`python -m src.pipeline.rq3`: 150 câu chuẩn ViLexNorm test, gây lỗi tự động như stress test (seed 2026), 5 kiểu lỗi.
+Gợi ý (sau bộ lọc của ranker) được so với **câu chuẩn**: *đạt* = giữ nghĩa (cosine ≥ 0,8 và NLI hai chiều ≥ 0,17)
+và không mang từ lạ (từ ngoài từ điển câu chuẩn train). Ô = gợi ý đầu đạt / có ít nhất 1 gợi ý đạt
+(`outputs/metrics/rq3.md`).
+
+| Kiểu lỗi | Diễn đạt thẳng câu lỗi | Sửa lỗi rồi diễn đạt (đang dùng) | Diễn đạt câu chuẩn (cận trên) |
+|---|---|---|---|
+| Câu đã đúng | 78,0% / 78,0% | 75,3% / 75,3% | 80,0% / 80,0% |
+| Không dấu cả câu | 1,3% / 2,0% | 53,3% / 56,0% | 80,0% / 80,0% |
+| Bấm hụt | 36,0% / 41,3% | 58,0% / 61,3% | 80,0% / 80,0% |
+| Sai dấu | 28,0% / 32,7% | 66,0% / 67,3% | 80,0% / 80,0% |
+| Gõ nhanh | 1,3% / 1,3% | 38,7% / 46,7% | 80,0% / 80,0% |
+
+Nhận xét:
+- Trả lời RQ3: **sửa lỗi trước** tốt hơn hẳn ở mọi kiểu lỗi; với câu không dấu/gõ nhanh, diễn đạt thẳng gần như
+  không bao giờ cho gợi ý dùng được (1–2%): mô hình ViSP học trên văn bản chuẩn, gặp câu không dấu thì chép lại lỗi
+  ("Duong Mich hin xua…" -> "Dương Mich hin xua trong treo qua.") hoặc bịa nội dung (cosine với câu chuẩn chỉ 0,44).
+  Bộ lọc không chặn được vì nó so ứng viên với chính câu lỗi.
+- Gợi ý của hệ hai bước hầu như không mang lỗi (sạch 98–100%), phần thua cận trên là do bước sửa lỗi sai
+  (đổi nghĩa) — khớp với kết quả stress test.
+- Với câu đã đúng, hai bước kém diễn đạt thẳng 2,7 điểm: đó là cái giá của sửa quá tay (#13).
+- Cận trên chỉ 80% vì 20% câu không còn gợi ý nào qua bộ lọc (bộ lọc chặt). Với cận trên, tiêu chí "đạt" trùng
+  với tiêu chí lọc nên đạt 100% số câu có gợi ý theo định nghĩa: chỉ dùng cột này làm mốc, so sánh thật là hai cột đầu.
+- Giới hạn: chấm tự động bằng embedding/NLI, chưa bắt được gợi ý lặp ý ("Tôi không thích mặc đồ hiệu nà và không
+  thích mặc đồ hiệu nà." vẫn "đạt") -> cần #17 chấm thủ công.
+
+## Vòng 5: hình/bảng cho báo cáo (#15) và huấn luyện thêm mô hình diễn đạt lại (#16)
+
+**#15.** Ba notebook (`notebooks/01_explore_vsec`, `02_explore_visp`, `03_error_analysis`) đã có nội dung và kết quả;
+hình ở `reports/figures/` (độ dài câu, kiểu lỗi từng dataset, kiểu lỗi nhân tạo, ViSP, đường loss, stress test
+top-1/top-3, RQ3), bảng ở `reports/tables/`. Phân bố kiểu lỗi (mẫu 8.000 câu/dataset): VSEC chủ yếu thiếu/sai dấu
+(~65%), ViLexNorm chủ yếu viết tắt/teencode (~60%), VEC trộn cả hai. Bảng 20 lỗi tiêu biểu của v2+GĐ2
+(`reports/tables/03_error_examples.md`, phân loại thủ công):
+
+| Loại lỗi | Số ví dụ | Ví dụ |
+|---|---|---|
+| Viết tắt mơ hồ | 4 | "m" -> "mày" (đúng: mình), "c" -> "chị" (đúng: cậu) |
+| Sửa thành từ có thật nhưng sai | 4 | "xịu" -> "chịu" (xịt), "dzú" -> "vợ" (vú) |
+| Sửa quá tay | 4 | "ruby" -> "rực rỡ", "lane" -> "lăn", "quá hời" -> "quá trời" |
+| Mất/đổi nội dung | 3 | "tuấn hoàn" -> "kiệt quệ" (tuần hoàn), tên "Mi nơ" -> "Mixi" |
+| Bỏ sót lỗi | 2 | "gặt bỏ" (gạt bỏ), "dạy thì" (dậy thì): sai thành từ có thật |
+| Lỗi nhãn | 3 | nhãn tự đổi "2005" -> "2006"; nhãn bỏ sót "Hà nội" |
+
+**#16.** Huấn luyện tiếp mô hình diễn đạt lại thêm 2 epoch từ mô hình 2 epoch (`configs/paraphrase_continue.yaml`,
+lr 2e-4, 43,7 phút) -> `models/paraphrase/vit5-base-ep4`. Kết quả **không tốt hơn**, giữ mô hình cũ:
+
+| | val loss | BLEU tham chiếu ↑ | self-BLEU ↓ | iBLEU ↑ | cosine với câu gốc | Tích hợp: số gợi ý TB / giữ số-tên-phủ định |
+|---|---|---|---|---|---|---|
+| 2 epoch (đang dùng) | **1,089** | **75,9** | 74,2 | **45,9** | **0,968** | **2,49** / 96,1% |
+| +2 epoch | 1,199 | 73,9 | **68,8** | 45,4 | 0,958 | 2,15 / 96,6% |
+
+Mô hình mới diễn đạt khác câu gốc hơn (self-BLEU thấp hơn) nhưng xa câu người viết hơn và ít gợi ý qua bộ lọc hơn.
+Val loss tăng ngay ở lần đo đầu (1,28): khởi động lại lr đẩy mô hình khỏi điểm tốt; train loss giảm mạnh ở epoch 3
+(0,7, đã thấy dữ liệu 2 lần) -> học thuộc. Nhận xét "val loss còn giảm" lúc trước là do lr giảm dần về 0 ở cuối lần
+huấn luyện đầu, không phải do còn chỗ để học.
