@@ -35,7 +35,7 @@ Trạng thái: ✅ xong · 🔄 đang làm · ⏳ chưa làm · 💤 để sau (
 | 16 | **[Ưu tiên 2]** Huấn luyện thêm 1–2 epoch mô hình diễn đạt lại (#10) rồi đo lại ViSP + tập tích hợp | ✅ | Đã thử +2 epoch: val loss TĂNG 1,09 -> 1,20, giữ mô hình cũ; xem "Vòng 5" |
 | 17 | **[Ưu tiên 3]** Đánh giá thủ công: chuẩn bị file + rubric 0/1 (giữ nghĩa, tự nhiên, không thêm/bỏ ý) cho 50–100 gợi ý; NGƯỜI DÙNG chấm (~1 giờ); tính Top-1/Top-3 chấp nhận | ✅ | Người dùng chấm 85 gợi ý: Top-1 35%, Top-3 52,5%; chấm tự động cho đạt 87% -> không tin được, xem "Vòng 6" |
 | 18 | Duyệt tập kiểm thử tích hợp (41 câu `status=draft`) hoặc ghi rõ trong báo cáo là chỉ tham khảo | ✅ | Người dùng giữ cả 41 câu -> `status=approved`; kết quả tích hợp không đổi (EM 87,8%) |
-| 19 | Viết báo cáo + slide từ mục 14 file plan và các kết quả trên | ⏳ | làm sau cùng |
+| 19 | Viết báo cáo + slide từ mục 14 file plan và các kết quả trên | ⏸️ | Chờ người dùng có mẫu báo cáo + phiếu chấm của giảng viên (định dạng, độ dài, slide quyết theo mẫu). Đã chốt nhấn mạnh cả 4: quy trình & phát hiện, cải tiến mô hình, demo & ứng dụng, hạn chế trung thực |
 
 ## Kết quả vòng 1 (26/10/2026)
 
