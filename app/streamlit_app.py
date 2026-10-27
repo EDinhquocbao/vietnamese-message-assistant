@@ -24,7 +24,7 @@ EXAMPLES = [
 
 HISTORY = Path("outputs/logs/demo_history.jsonl")  # lưu mỗi lần xử lý để phân tích lỗi sau
 
-st.set_page_config(page_title="Trợ lý tin nhắn tiếng Việt", page_icon="✍️")
+st.set_page_config(page_title="Hệ thống sửa lỗi tin nhắn tiếng Việt", page_icon="✍️")
 
 
 @st.cache_resource(show_spinner="Đang nạp mô hình...")
