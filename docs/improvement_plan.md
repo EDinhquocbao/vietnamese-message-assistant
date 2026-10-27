@@ -33,8 +33,8 @@ Trạng thái: ✅ xong · 🔄 đang làm · ⏳ chưa làm · 💤 để sau (
 | 14 | **[Ưu tiên 1]** Trả lời RQ3 tự động: diễn đạt lại thẳng câu lỗi vs sửa lỗi rồi mới diễn đạt (dùng đầu vào stress test, so với câu chuẩn bằng similarity/NLI/self-BLEU) | ✅ | `src/pipeline/rq3.py`; sửa trước rồi diễn đạt tốt hơn hẳn, xem "Vòng 4" |
 | 15 | **[Ưu tiên 1]** Hình và bảng cho báo cáo: điền 3 notebook trống (độ dài câu, phân bố kiểu lỗi, đường loss các lần train, cột stress test top-1/top-3) + bảng 20 lỗi tiêu biểu có phân loại (viết tắt mơ hồ, sai thành từ có thật, sửa quá tay, lỗi nhãn, mất nội dung) | ✅ | 3 notebook đã chạy; 9 hình `reports/figures/`, bảng `reports/tables/` (20 lỗi: `03_error_examples.md`) |
 | 16 | **[Ưu tiên 2]** Huấn luyện thêm 1–2 epoch mô hình diễn đạt lại (#10) rồi đo lại ViSP + tập tích hợp | ✅ | Đã thử +2 epoch: val loss TĂNG 1,09 -> 1,20, giữ mô hình cũ; xem "Vòng 5" |
-| 17 | **[Ưu tiên 3]** Đánh giá thủ công: chuẩn bị file + rubric 0/1 (giữ nghĩa, tự nhiên, không thêm/bỏ ý) cho 50–100 gợi ý; NGƯỜI DÙNG chấm (~1 giờ); tính Top-1/Top-3 chấp nhận | ⏳ | thiếu lớn nhất: chỉ số tự động đã được chứng minh là không đủ cho diễn đạt lại |
-| 18 | Duyệt tập kiểm thử tích hợp (41 câu `status=draft`) hoặc ghi rõ trong báo cáo là chỉ tham khảo | ⏳ | người dùng quyết định |
+| 17 | **[Ưu tiên 3]** Đánh giá thủ công: chuẩn bị file + rubric 0/1 (giữ nghĩa, tự nhiên, không thêm/bỏ ý) cho 50–100 gợi ý; NGƯỜI DÙNG chấm (~1 giờ); tính Top-1/Top-3 chấp nhận | 🔄 | File đã sẵn sàng: `reports/manual_eval/danh_gia_thu_cong.xlsx` (40 tin nhắn ViLexNorm, 85 gợi ý); chờ NGƯỜI DÙNG chấm, rồi `python -m src.pipeline.manual_eval score` |
+| 18 | Duyệt tập kiểm thử tích hợp (41 câu `status=draft`) hoặc ghi rõ trong báo cáo là chỉ tham khảo | 🔄 | Cùng file Excel, sheet 'Duyệt tập kiểm thử' (Giữ/Sửa/Bỏ); `score` tự áp vào CSV |
 | 19 | Viết báo cáo + slide từ mục 14 file plan và các kết quả trên | ⏳ | làm sau cùng |
 
 ## Kết quả vòng 1 (26/10/2026)
@@ -187,3 +187,15 @@ Mô hình mới diễn đạt khác câu gốc hơn (self-BLEU thấp hơn) như
 Val loss tăng ngay ở lần đo đầu (1,28): khởi động lại lr đẩy mô hình khỏi điểm tốt; train loss giảm mạnh ở epoch 3
 (0,7, đã thấy dữ liệu 2 lần) -> học thuộc. Nhận xét "val loss còn giảm" lúc trước là do lr giảm dần về 0 ở cuối lần
 huấn luyện đầu, không phải do còn chỗ để học.
+
+## Vòng 6: chuẩn bị đánh giá thủ công (#17) và duyệt tập kiểm thử (#18)
+
+`python -m src.pipeline.manual_eval prepare` chạy hệ thống trên 120 tin nhắn thật ngẫu nhiên của ViLexNorm test
+(5–30 từ, seed 2026): 86/120 (72%) có ít nhất 1 gợi ý (còn lại bị chặn do còn từ lạ hoặc không ứng viên nào qua bộ
+lọc). Lấy 40 tin nhắn có gợi ý -> 85 gợi ý cần chấm; bước sửa lỗi đúng hoàn toàn 31/40 câu. Gợi ý được chấm so với
+**câu chuẩn của người gán nhãn** (ý người viết), nên đo chất lượng đầu-cuối của cả hai bước.
+Rubric 0/1: đạt cả ba (đúng ý, tự nhiên, không thêm/bỏ ý); nếu 0 chọn lý do (đổi nghĩa, thêm/bỏ ý, đảo vai,
+không tự nhiên, còn lỗi, khác). `score` tính Top-1 (gợi ý đầu đạt), Top-3 (có ít nhất 1 gợi ý đạt), tỉ lệ đạt từng
+gợi ý và phân bố lý do -> `outputs/metrics/manual_eval.json`; đồng thời áp quyết định duyệt vào
+`data/test/integration_test.csv` (Giữ/Sửa -> approved, Bỏ -> xóa). Sau đó chạy lại
+`python -m src.pipeline.evaluate_integration` (không cần `--include_draft`).

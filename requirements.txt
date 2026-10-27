@@ -9,6 +9,7 @@ pandas
 numpy
 matplotlib
 tabulate                # DataFrame.to_markdown trong notebook báo cáo
+openpyxl                # file Excel chấm thủ công (src/pipeline/manual_eval.py)
 seaborn
 PyYAML
 tqdm
