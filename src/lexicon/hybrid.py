@@ -1,10 +1,13 @@
 """Kết hợp từ điển và mô hình sửa lỗi. Có __call__ và nbest nên dùng thẳng được với evaluate() và top_options().
 
-Bốn chế độ để so sánh:
+Các chế độ để so sánh:
 - model:   mô hình hiện tại, làm mốc.
 - lexicon: chỉ từ điển + bigram.
 - guard:   mô hình sửa trước; phép sửa nào không nằm trong ứng viên của từ điển thì trả về từ gốc.
 - rerank:  gộp câu ghép từ từ điển và kết quả beam của mô hình, mô hình chấm log P(câu | nguồn), cộng điểm kênh nhiễu.
+- route:   chia đường theo câu nhập: tỉ lệ từ có dấu < route_tau (gần như gõ không dấu/gõ nhanh), hoặc (nếu
+           route_typo) có từ lạ hoàn toàn (không trong từ điển, bảng viết tắt, từ điển viết tắt: thường là gõ nhầm) thì
+           dùng model, còn lại dùng rerank. Chọn trên val (`evaluate_hybrid route`).
 """
 import math
 from difflib import SequenceMatcher
@@ -15,6 +18,12 @@ from src.utils.text_utils import normalize_text
 
 def _is_word(tok: str) -> bool:
     return any(c.isalnum() for c in tok)
+
+
+def marked_ratio(text: str) -> float:
+    """Tỉ lệ từ (chỉ gồm chữ cái) có dấu hoặc chữ đ. Câu không có từ nào thì coi như có dấu đủ (1.0)."""
+    words = [t for t in SPAN.findall(text.lower()) if t.isalpha()]
+    return sum(not t.isascii() for t in words) / len(words) if words else 1.0
 
 
 class CachedModel:
@@ -54,11 +63,22 @@ def _softmax(rows: list[tuple[str, float]]) -> list[dict]:
 
 class HybridCorrector:
     def __init__(self, mode: str, lex: Lexicon | None = None, model=None, k: int = 8, n: int = 8, alpha: float = 1.0,
-                 beta: float = 1.0, penalty: float = -8.0, guard_k: int | None = None):
-        if mode not in {"model", "lexicon", "guard", "rerank"}:
+                 beta: float = 1.0, penalty: float = -8.0, guard_k: int | None = None, route_tau: float = 0.3,
+                 route_typo: bool = False):
+        if mode not in {"model", "lexicon", "guard", "rerank", "route"}:
             raise ValueError(mode)
         self.mode, self.lex, self.model = mode, lex, model
         self.k, self.n, self.alpha, self.beta, self.penalty, self.guard_k = k, n, alpha, beta, penalty, guard_k
+        self.route_tau, self.route_typo = route_tau, route_typo
+
+    def odd_word(self, text: str) -> bool:
+        """Câu có từ lạ hoàn toàn: không có trong từ điển, bảng viết tắt trích từ train hay từ điển viết tắt."""
+        return any(w.isalpha() and w not in self.lex.vocab and w not in self.lex.mapping and w not in self.lex.nsw
+                   for w in SPAN.findall(text.lower()))
+
+    def to_model(self, text: str) -> bool:
+        """Chế độ route: câu này dùng model (True) hay rerank (False)."""
+        return marked_ratio(text) < self.route_tau or (self.route_typo and self.odd_word(text))
 
     # ------------------------------------------------------------------ đối chiếu với từ điển
     def _allowed(self, raw: str, restrict: bool) -> set[str]:
@@ -134,10 +154,24 @@ class HybridCorrector:
             return self.model.nbest(texts)
         if self.mode == "lexicon":
             return [_softmax([(p.text, p.score) for p in self.lex.best_paths(t, self.k, self.n, self.alpha)]) for t in texts]
-        alts = self.model.nbest(texts)
+        if self.mode == "route":
+            to_model = [self.to_model(t) for t in texts]
+            mi = [i for i, m in enumerate(to_model) if m]
+            ri = [i for i, m in enumerate(to_model) if not m]
+            out: list = [None] * len(texts)
+            for i, a in zip(mi, self.model.nbest([texts[i] for i in mi]) if mi else []):
+                out[i] = a
+            for i, a in zip(ri, self._rerank([texts[i] for i in ri]) if ri else []):
+                out[i] = a
+            return out
         if self.mode == "guard":
+            alts = self.model.nbest(texts)
             return [_softmax([(self.guard(t, a["text"]), math.log(max(a["prob"], 1e-12))) for a in al])
                     for t, al in zip(texts, alts)]
+        return self._rerank(texts)
+
+    def _rerank(self, texts: list[str]) -> list[list[dict]]:
+        alts = self.model.nbest(texts)
         pools = []
         for t, al in zip(texts, alts):
             pool = dict.fromkeys([normalize_text(t)] + [a["text"] for a in al]
