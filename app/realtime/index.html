@@ -1,0 +1,256 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Hệ thống sửa lỗi tin nhắn tiếng Việt</title>
+<style>
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: #fff; color: #111; }
+  body { font: 17px/1.5 "Segoe UI", system-ui, sans-serif; }
+  main { max-width: 640px; min-height: 100%; margin: 0 auto; padding: 16px 16px 22vh; display: flex; flex-direction: column; justify-content: flex-end; }
+
+  .composer { position: relative; }
+  .box { display: flex; align-items: flex-end; gap: 8px; padding: 8px 8px 8px 16px; border: 1px solid #cfcfcf; border-radius: 22px; }
+  .box:focus-within { border-color: #888; }
+  .field { position: relative; flex: 1; min-width: 0; }
+  .field textarea, .field .mirror { margin: 0; padding: 4px 0; font: inherit; letter-spacing: normal; white-space: pre-wrap; overflow-wrap: break-word; word-break: normal; }
+  .field textarea { position: relative; z-index: 1; display: block; width: 100%; height: 34px; max-height: 40vh; border: 0; outline: 0; resize: none; background: transparent; color: inherit; overflow-y: auto; }
+  .field .mirror { position: absolute; inset: 0; color: transparent; pointer-events: none; overflow: hidden; }
+  .mirror .u { text-decoration: underline wavy #c33; text-decoration-skip-ink: none; text-underline-offset: 5px; }
+  .send { flex: none; height: 34px; padding: 0 16px; font: inherit; font-size: 15px; color: #111; background: #fff; border: 1px solid #cfcfcf; border-radius: 17px; cursor: pointer; }
+  .send:hover { border-color: #888; }
+  .send:disabled { color: #aaa; cursor: default; border-color: #e5e5e5; }
+
+  .pop { position: absolute; left: 0; right: 0; bottom: calc(100% + 8px); background: #fff; border: 1px solid #d6d6d6; border-radius: 14px; box-shadow: 0 4px 16px rgba(0,0,0,.08); padding: 6px 0; max-height: 60vh; overflow-y: auto; }
+  .pop[hidden] { display: none; }
+  .label { padding: 6px 16px 2px; font-size: 13px; color: #777; }
+  .row { display: block; width: 100%; padding: 8px 16px; font: inherit; text-align: left; color: #111; background: #fff; border: 0; cursor: pointer; }
+  .row:hover, .row.active { background: #f2f2f2; }
+  .row b { font-weight: 600; }
+  .note { padding: 8px 16px; font-size: 15px; color: #888; }
+
+  .hint { margin: 10px 4px 0; font-size: 13px; color: #888; }
+</style>
+</head>
+<body>
+<main>
+  <div class="composer">
+    <div class="pop" id="pop" role="listbox" aria-label="Gợi ý" hidden></div>
+    <div class="box">
+      <div class="field">
+        <div class="mirror" id="mirror" aria-hidden="true"></div>
+        <textarea id="input" rows="1" autofocus spellcheck="false" placeholder="Nhập tin nhắn" aria-label="Tin nhắn"></textarea>
+      </div>
+      <button class="send" id="send" type="button" disabled>Gửi</button>
+    </div>
+  </div>
+  <p class="hint" id="hint">Gõ xong một từ thì nhấn dấu cách để nhận gợi ý; gõ . ! ? là sang câu mới (bấm vào câu cũ để sửa lại). Enter để gửi, Shift+Enter để xuống dòng, Esc để ẩn gợi ý.</p>
+</main>
+<script>
+  const input = document.getElementById('input');
+  const mirror = document.getElementById('mirror');
+  const pop = document.getElementById('pop');
+  const sendBtn = document.getElementById('send');
+  const hint = document.getElementById('hint');
+  const HINT = hint.textContent;
+  const PAUSE_MS = 350;
+
+  let ws, seq = 0, updSeq = 0, sendSeq = 0, pauseTimer = null;
+  let words = [], rows = [];               // trạng thái lúc đang gõ (từ server)
+  let mode = 'typing', dismissed = false;  // 'typing' | 'sent'
+  let sent = null;                         // {input, fixes: null|[], para: undefined|{text, reason}}
+  let items = [], active = -1;             // các dòng đang hiện trong danh sách
+
+  function post(obj) { if (ws && ws.readyState === 1) ws.send(JSON.stringify(obj)); }
+  function update() { updSeq = ++seq; post({ type: 'update', seq: updSeq, text: input.value, caret: input.selectionStart }); }
+  // Con trỏ chuyển chỗ mà chữ không đổi: server gợi ý lại cho câu chứa con trỏ.
+  function caretMoved() {
+    if (mode !== 'typing') return;
+    dismissed = false;
+    updSeq = ++seq; post({ type: 'caret', seq: updSeq, caret: input.selectionStart });
+  }
+  function schedulePause() { clearTimeout(pauseTimer); pauseTimer = setTimeout(() => post({ type: 'pause', seq: updSeq }), PAUSE_MS); }
+
+  function connect() {
+    ws = new WebSocket(`ws://${location.host}/ws`);
+    ws.onopen = () => { hint.textContent = HINT; if (input.value) update(); };
+    ws.onclose = () => { hint.textContent = 'Mất kết nối với hệ thống, đang thử lại...'; setTimeout(connect, 1500); };
+    ws.onmessage = (e) => {
+      const m = JSON.parse(e.data);
+      if (m.type === 'state') {
+        if (m.seq !== updSeq) return;          // kết quả cũ, người dùng đã gõ tiếp
+        words = m.words; rows = m.rows;
+        if (applyAuto()) return;               // đã đổi chữ Telex thì chờ kết quả mới
+        drawMirror();
+        if (mode === 'typing') drawPop();
+      } else if (sent && m.seq === sendSeq) {
+        if (m.type === 'fixes') sent.fixes = m.rows;
+        if (m.type === 'para') sent.para = { text: m.text, reason: m.reason };
+        if (mode === 'sent') drawPop();
+      }
+    };
+  }
+
+  // Thay đoạn [start, end) trong ô nhập, giữ con trỏ đúng chỗ.
+  function replaceRange(start, end, text) {
+    const pos = input.selectionStart;
+    input.value = input.value.slice(0, start) + text + input.value.slice(end);
+    const delta = text.length - (end - start);
+    const next = pos >= end ? pos + delta : Math.min(pos, start + text.length);
+    input.setSelectionRange(next, next);
+  }
+
+  // Telex chắc chắn ("nguowif" -> "người"): đổi ngay trong ô nhập.
+  function applyAuto() {
+    let changed = false;
+    for (const w of [...words].reverse()) {
+      if (w.auto && input.value.slice(w.start, w.end) === w.raw) { replaceRange(w.start, w.end, w.shown); changed = true; }
+    }
+    if (changed) { resize(); update(); }
+    return changed;
+  }
+
+  // Lớp chữ trong suốt nằm dưới ô nhập, chỉ để vẽ gạch chân ở từ chưa chắc.
+  function drawMirror() {
+    const v = input.value;
+    mirror.replaceChildren();
+    let last = 0;
+    for (const w of words) {
+      if (!w.uncertain || w.start < last || v.slice(w.start, w.end) !== w.shown) continue;
+      mirror.append(v.slice(last, w.start));
+      const s = document.createElement('span');
+      s.className = 'u';
+      s.textContent = v.slice(w.start, w.end);
+      mirror.append(s);
+      last = w.end;
+    }
+    mirror.append(v.slice(last) + '\n');
+    mirror.scrollTop = input.scrollTop;
+  }
+
+  // In đậm những từ khác với chữ đang có trong ô nhập (khi hai câu cùng số từ).
+  function rowContent(el, text, base) {
+    const a = text.split(' '), b = base.split(' ');
+    if (a.length !== b.length) { el.textContent = text; return; }
+    a.forEach((tok, i) => {
+      if (i) el.append(' ');
+      if (tok !== b[i]) { const x = document.createElement('b'); x.textContent = tok; el.append(x); } else el.append(tok);
+    });
+  }
+
+  function addLabel(text) { const d = document.createElement('div'); d.className = 'label'; d.textContent = text; pop.append(d); }
+  function addNote(text) { const d = document.createElement('div'); d.className = 'note'; d.textContent = text; pop.append(d); }
+  function addRow(text, onPick, base = input.value) {
+    const b = document.createElement('button');
+    b.type = 'button'; b.className = 'row'; b.setAttribute('role', 'option');
+    rowContent(b, text, base);
+    b.addEventListener('mousedown', (e) => e.preventDefault());  // giữ con trỏ trong ô nhập
+    b.addEventListener('click', onPick);
+    pop.append(b);
+    items.push({ el: b, onPick });
+  }
+
+  function drawPop() {
+    pop.replaceChildren(); items = []; active = -1;
+    if (mode === 'typing') {
+      // chỉ câu chứa con trỏ: mỗi dòng thay cho đoạn [start, end) của ô nhập
+      const current = (r) => input.value.slice(r.start, r.end);
+      const useful = rows.length > 1 || (rows.length === 1 && rows[0].text !== current(rows[0]));
+      if (dismissed || !input.value.trim() || !useful) { pop.hidden = true; return; }
+      addLabel('Gợi ý cho câu này');
+      rows.forEach((r, i) => addRow(r.text, () => pickTyping(i), current(r)));
+    } else {
+      addLabel('Câu đã sửa');
+      if (!sent.fixes) addNote('Đang sửa...');
+      else sent.fixes.forEach((t, i) => addRow(t, () => useSent('sua_loi', t, i)));
+      addLabel('Diễn đạt lại ý');
+      if (sent.para === undefined) addNote('Đang tìm cách diễn đạt...');
+      else if (sent.para.text) addRow(sent.para.text, () => useSent('dien_dat', sent.para.text, 0));
+      else addNote('Không có cách diễn đạt đủ tốt (' + sent.para.reason + ').');
+    }
+    pop.hidden = false;
+  }
+
+  function setActive(i) {
+    items.forEach((it, j) => it.el.classList.toggle('active', j === i));
+    active = i;
+    if (items[i]) items[i].el.scrollIntoView({ block: 'nearest' });
+  }
+
+  function setText(text) {
+    input.value = text;
+    input.setSelectionRange(text.length, text.length);
+    resize(); drawMirror();
+  }
+
+  function pickTyping(i) {
+    const r = rows[i];
+    post({ type: 'pick', text: input.value, picks: r.picks, first: r.first, chosen: r.text, rank: i, rows: rows.map(x => x.text) });
+    replaceRange(r.start, r.end, r.text);
+    const at = r.start + r.text.length;
+    input.setSelectionRange(at, at);
+    resize(); drawMirror();
+    update(); schedulePause();
+    input.focus();
+  }
+
+  function useSent(kind, text, rank) {
+    post({ type: 'use', kind, input: sent.input, chosen: text, rank });
+    mode = 'typing'; dismissed = true; pop.hidden = true;
+    setText(text);
+    update();
+    input.focus();
+  }
+
+  function submit() {
+    const text = input.value.trim();
+    if (!text) return;
+    clearTimeout(pauseTimer);
+    sendSeq = ++seq;
+    sent = { input: input.value, fixes: null, para: undefined };
+    mode = 'sent'; dismissed = false;
+    post({ type: 'send', seq: sendSeq, text });
+    drawPop();
+  }
+
+  function resize() {
+    input.style.height = 'auto';
+    input.style.height = input.scrollHeight + 'px';
+    sendBtn.disabled = !input.value.trim();
+  }
+
+  input.addEventListener('input', () => {
+    mode = 'typing'; dismissed = false;
+    resize(); drawMirror(); update(); schedulePause();
+  });
+  input.addEventListener('scroll', () => { mirror.scrollTop = input.scrollTop; });
+  input.addEventListener('click', caretMoved);
+  input.addEventListener('keyup', (e) => {
+    const nav = ['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(e.key) || (pop.hidden && ['ArrowUp', 'ArrowDown'].includes(e.key));
+    if (nav) caretMoved();
+  });
+  input.addEventListener('keydown', (e) => {
+    const open = !pop.hidden && items.length;
+    if (e.key === 'Escape') { dismissed = true; pop.hidden = true; if (mode === 'sent') mode = 'typing'; return; }
+    if (open && (e.key === 'ArrowUp' || e.key === 'ArrowDown')) {
+      e.preventDefault();
+      const n = items.length;
+      setActive(e.key === 'ArrowUp' ? (active <= 0 ? n - 1 : active - 1) : (active + 1) % n);
+      return;
+    }
+    if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) {
+      e.preventDefault();
+      if (open && active >= 0) items[active].onPick(); else submit();
+    }
+  });
+  sendBtn.addEventListener('click', () => { submit(); input.focus(); });
+  document.addEventListener('mousedown', (e) => {
+    if (!e.target.closest('.composer')) { dismissed = true; pop.hidden = true; if (mode === 'sent') mode = 'typing'; }
+  });
+
+  resize();
+  connect();
+</script>
+</body>
+</html>

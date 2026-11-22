@@ -36,6 +36,8 @@ Trạng thái: ✅ xong · 🔄 đang làm · ⏳ chưa làm · 💤 để sau (
 | 17 | **[Ưu tiên 3]** Đánh giá thủ công: chuẩn bị file + rubric 0/1 (giữ nghĩa, tự nhiên, không thêm/bỏ ý) cho 50–100 gợi ý; NGƯỜI DÙNG chấm (~1 giờ); tính Top-1/Top-3 chấp nhận | ✅ | Người dùng chấm 85 gợi ý: Top-1 35%, Top-3 52,5%; chấm tự động cho đạt 87% -> không tin được, xem "Vòng 6" |
 | 18 | Duyệt tập kiểm thử tích hợp (41 câu `status=draft`) hoặc ghi rõ trong báo cáo là chỉ tham khảo | ✅ | Người dùng giữ cả 41 câu -> `status=approved`; kết quả tích hợp không đổi (EM 87,8%) |
 | 19 | Viết báo cáo + slide từ mục 14 file plan và các kết quả trên | ⏸️ | Chờ người dùng có mẫu báo cáo + phiếu chấm của giảng viên (định dạng, độ dài, slide quyết theo mẫu). Đã chốt nhấn mạnh cả 4: quy trình & phát hiện, cải tiến mô hình, demo & ứng dụng, hạn chế trung thực |
+| 20 | Bản thử gợi ý ngay tại từ: từ điển đề xuất ứng viên, ViT5 chọn, gợi ý sau mỗi từ (nhánh `feat/lexicon-realtime`, chưa gộp `main`) | 🧪 | Xong bản thử, xem "Vòng 7". Chế độ kết hợp không đạt điều kiện giữ; mô hình sửa cả câu vẫn là A |
+| 21 | Giao diện khung tin nhắn (demo chính): nền trắng, một khung soạn tin, danh sách gợi ý **cả câu** trồi lên khi gõ; Gửi = câu đã sửa + 1 câu diễn đạt lại | ✅ | Xem "Vòng 8"; thiết kế: `docs/superpowers/specs/2026-11-22-message-box-ui-design.md` |
 
 ## Kết quả vòng 1 (26/10/2026)
 
@@ -237,3 +239,77 @@ Nhận xét:
   hoặc ưu tiên gợi ý gần câu gốc hơn.
 - Người chấm nhận xét thêm: khi 3 gợi ý cùng nghĩa thì đưa 3 câu là thừa (M31).
 - Giới hạn: một người chấm, 40 tin nhắn; không có độ đồng thuận giữa người chấm.
+
+## Vòng 7: từ điển đề xuất, mô hình chọn và gợi ý sau mỗi từ (#20, 09/11/2026)
+
+Mục tiêu: gợi ý ngay tại từ sai và giữ nguyên cách nói. Không train lại; demo Streamlit và bước diễn đạt lại giữ nguyên.
+Lệnh: `python -m src.lexicon.build`, `python -m src.lexicon.evaluate_hybrid tune|test`, `python -m src.realtime.simulate --n 300`,
+`python -m app.realtime.server` (http://localhost:8765). Kết quả: `outputs/metrics/hybrid_*.json`, `hybrid_comparison.md`,
+`realtime_simulation.json`.
+
+Từ điển: bảng từ gốc -> từ đúng, unigram, bigram trích chỉ từ `correction/train`; thêm `vi-nsw-dict` (không ghi giấy phép, chỉ dùng
+cục bộ). `kcj` không có trong nguồn nào nên thêm tay (`EXTRA_NSW`). Viet74K bị bỏ: chỉ thêm 0,13 điểm độ phủ (96,89% so với 96,77%),
+F0.5 không cải thiện. Tham số chọn trên val 1.847 câu: k=10, alpha=2 (biên lưới đã thử), beta=1, penalty=−8, guard_k=20.
+
+| WER / câu đúng hết / sửa quá tay | A. Mô hình | B. Chỉ từ điển | C. Lá chắn | D. Chọn lại |
+|---|---|---|---|---|
+| ViLexNorm test | 3,74% / 68,4% / 14,3% | 5,59% / 58,0% / 29,1% | 3,76% / 69,6% / 10,6% | **3,25% / 72,3% / 11,1%** |
+| VSEC test | **1,16% / 70,1%** / 4,1% | 2,14% / 53,9% / 19,5% | 1,25% / 68,0% / 3,2% | 1,40% / 62,7% / 2,1% |
+| VEC test (tham khảo) | 7,69% / 52,6% / 9,2% | 11,29% / 34,5% / 27,9% | 8,40% / 50,4% / 6,6% | 6,87% / 52,9% / 6,1% |
+| Stress không dấu: câu đúng | 45,8% | 28,5% | 46,5% | 43,5% |
+| Stress gõ nhanh: câu đúng | **26,8%** | 9,8% | 22,8% | 21,2% |
+
+Chế độ A khớp số cũ (ViLexNorm WER 3,74%, câu đúng 68,4%). Riêng gõ nhanh lần này 26,8% so với 26,5% ở Vòng 3 (chênh khoảng 1 câu
+trên 400), không đổi kết luận.
+
+Điều kiện giữ C/D (đặt trước khi chạy test): WER ViLexNorm không tệ hơn A; sửa quá tay ViLexNorm thấp hơn A; gõ nhanh giảm ≤ 1 điểm.
+C trượt 2 điều kiện (WER 3,76%; gõ nhanh −4,0 điểm); D trượt điều kiện 3 (−5,6 điểm) và tệ hơn A trên VSEC. -> **Giữ A.**
+
+Gợi ý sau mỗi từ, giả lập 300 câu ViLexNorm test (4–25 từ), tầng từ điển + ViT5 (A); "chọn đúng" là cận trên:
+
+| Đầu vào | Chưa sửa WER | Nhận gợi ý đầu WER / câu đúng | Chọn đúng WER / câu đúng | Từ sai: top-1 / top-3 | Chạm mỗi câu | Gợi ý đầu bị đổi mỗi câu |
+|---|---|---|---|---|---|---|
+| ViLexNorm test | 18,4% | 3,5% / 73,3% | 2,4% / 88,0% | 90,1% / 96,6% | 1,7 | 0,9 |
+| Bỏ hết dấu | 74,9% | 14,0% / 31,7% | 3,6% / 71,0% | 84,0% / 95,1% | 8,2 | 3,2 |
+| Gõ nhanh | 77,2% | 20,4% / 13,3% | 9,6% / 35,0% | 76,1% / 87,7% | 7,7 | 4,1 |
+
+Độ trễ: tầng từ điển p95 < 0,5 ms (mục tiêu 20 ms); tầng ViT5 p50 ~92 ms, p95 ~121 ms (mục tiêu 500 ms). Trên trang thử: 65–211 ms,
+riêng lần đầu sau khi nạp mô hình 640–720 ms.
+
+Đã kiểm tra trên trình duyệt tích hợp: `con yeu qua ` (gạch chân, gợi ý yêu/quá), `nguowif ` -> người tự đổi, `kcj ` -> chọn "không có gì"
+rồi gõ tiếp, `conf ` -> còn; từ đã chọn không đổi lại. Phát hiện khi thử và đã sửa: từ bị khóa làm mất gợi ý nên gõ nhanh không sửa
+được nữa; nay khóa chỉ dừng xếp lại, gợi ý đầu khác chữ đang hiện thì vẫn chọn được.
+
+Hạn chế: câu không dấu/gõ nhanh cần ~8 lần chạm; `cnof` (đảo chữ chồng Telex) chưa ra `còn`; chỉ gợi ý sau mỗi từ, chưa theo ký tự;
+số giả lập trên 300 câu không so trực tiếp với bảng toàn tập test; chưa có người thật gõ thử.
+
+## Vòng 8: giao diện khung tin nhắn (#21, 22/11/2026)
+
+Theo yêu cầu người dùng: nền trắng, không màu mè, chỉ một khung soạn tin + nút Gửi, không có lịch sử trò chuyện. Chạy:
+`python -m app.realtime.server` -> http://localhost:8765 (nạp cả bộ sửa lỗi lẫn diễn đạt lại qua `configs/pipeline.yaml`;
+demo Streamlit giữ nguyên làm dự phòng).
+
+| Lúc | Danh sách trồi lên phía trên khung | Bấm một dòng |
+|---|---|---|
+| Đang gõ (sau mỗi dấu cách) | Tối đa 3 **câu hoàn chỉnh** (`Session.sentences`): từ đúng giữ nguyên, từ sai đã sửa; các dòng khác nhau ở từ chưa chắc, từ khác chữ đang gõ in đậm | Cả khung đổi thành câu đó; các từ đó khóa lại (`Session.pick`) |
+| Sau khi Gửi (chữ trong khung giữ nguyên) | "Câu đã sửa": 1–3 phương án của mô hình sửa cả câu; "Diễn đạt lại ý": 1 câu (không đưa nếu còn từ nghi lỗi hoặc không ứng viên nào qua bộ lọc) | Khung đổi thành câu đó, sửa tiếp được |
+
+Từ chưa chắc gạch chân ngay trong khung. Phím: mũi tên lên/xuống + Enter để chọn, Enter để gửi, Shift+Enter xuống dòng, Esc ẩn.
+Log: `outputs/logs/realtime_history.jsonl` (`pick`, `send`, `use`).
+
+Đã kiểm tra trên trình duyệt tích hợp (máy tính và khổ điện thoại 375 px): `con yeu qua nguowif hok ` -> danh sách "con yêu quá
+người không / con yêu qua người không / con yêu quá người học"; chọn bằng bàn phím; Gửi -> câu đã sửa sau ~0,4 s, câu diễn đạt sau
+~1,4 s (lần đầu sau khi nạp mô hình chậm hơn, vài giây). 119 test đạt.
+
+**Tách câu theo dấu kết thúc** (người dùng đề xuất cùng ngày, giống cách nhắn tin thật): gõ `.` `!` `?` `…` xong là danh sách
+chuyển sang câu mới, chỉ gợi ý cho các từ sau dấu đó (`Session.segments`, `Session.active`); dấu chấm giữa hai chữ số (`3.5`)
+không tính. Bấm con trỏ vào câu cũ (hoặc phím mũi tên/Home/End) thì danh sách hiện phương án cho riêng câu đó; chọn xong chỉ đoạn
+đó bị thay. Tầng ViT5 cũng chỉ chấm câu chứa từ (nhanh hơn với tin dài), và từ viết hoa đầu câu không còn bị coi là tên riêng.
+Gửi vẫn sửa cả tin nhắn. Đã thử: `chi oi e gui bai r a. c check giup e vs nhe ` -> danh sách chỉ có câu hai; bấm vào câu đầu ->
+"chị ơi em gửi bài rồi á. / ... rồi ạ. / ... rồi anh."; chọn xong câu hai giữ nguyên. Chạy lại giả lập 300 câu sau thay đổi:
+mọi chỉ số độ đúng giữ nguyên như Vòng 7 (câu test gần như chỉ một câu); tầng ViT5 p50/p95 khoảng 60/76 ms so với 92/121 ms trước
+đó (chưa tách được phần nhờ chấm từng câu với phần do GPU rảnh hơn lúc đo).
+
+Hạn chế thấy khi thử: câu diễn đạt lại vẫn hay đổi nghĩa ("mai em nghỉ học nha chị, em bị ốm rồi" -> "Em sẽ được nghỉ học nha chị và
+em bị ốm sau khi nghỉ học vào ngày mai."), đúng với kết quả chấm thủ công 35%; vài viết tắt một chữ cái vẫn đoán sai ở gợi ý đầu
+("c" -> "có" thay vì "chị", "a" -> "anh" thay vì "ạ").

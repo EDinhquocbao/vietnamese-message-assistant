@@ -40,7 +40,7 @@ def highlight(edits: list[dict]) -> str:
                       else f"+ **{html.escape(e['to'])}**" for e in edits)
 
 
-st.title("✍️ Trợ lý tin nhắn tiếng Việt")
+st.title("✍️ Hệ thống sửa lỗi tin nhắn tiếng Việt")
 st.caption("Sửa lỗi chính tả (ViT5 fine-tune trên VSEC + ViLexNorm + VEC) và gợi ý 2–3 cách diễn đạt lại (ViT5 fine-tune trên ViSP).")
 
 example = st.selectbox("Câu ví dụ", ["(tự nhập)"] + EXAMPLES)
