@@ -12,6 +12,8 @@ from src.lexicon.build import START
 from src.lexicon.candidates import SPAN, Lexicon, match_case
 from src.lexicon.telex import decode
 
+END = {".", "!", "?", "…"}  # dấu kết thúc câu: gõ xong là danh sách gợi ý chuyển sang câu mới
+
 
 @dataclass
 class Word:
@@ -35,12 +37,14 @@ class Session:
                  min_margin: float = 2.0):
         self.lex, self.k, self.top, self.alpha, self.beta, self.lock_after, self.min_margin = lex, k, top, alpha, beta, lock_after, min_margin
         self.words: list[Word] = []
+        self.text_now = ""     # chữ trong ô nhập lúc `sync` gần nhất
         self.best_changes = 0  # số lần gợi ý đầu của một từ bị đổi sau khi đã hiện, để đo độ ổn định
 
     # ------------------------------------------------------------------ cập nhật theo chữ người dùng gõ
     def sync(self, text: str) -> None:
         """Đồng bộ với toàn bộ nội dung ô nhập: giữ trạng thái các từ không đổi, xử lý lại từ chỗ khác đầu tiên.
         Từ cuối chưa có khoảng trắng hoặc dấu câu theo sau được coi là đang gõ dở."""
+        self.text_now = text
         spans = list(SPAN.finditer(text))
         if spans and spans[-1].end() == len(text) and spans[-1].group()[-1:].isalnum():
             spans = spans[:-1]
@@ -92,7 +96,9 @@ class Session:
         w.options = ranked
 
     def _push(self, raw: str, start: int, end: int) -> None:
-        w = Word(raw, start, end, restrict=bool(self.words) and raw[:1].isupper(), shown=raw)
+        # viết hoa giữa câu có thể là tên riêng; viết hoa đầu câu (sau . ! ?) thì không
+        mid = bool(self.words) and self.words[-1].raw not in END
+        w = Word(raw, start, end, restrict=mid and raw[:1].isupper(), shown=raw)
         self.words.append(w)
         self._rank(len(self.words) - 1)
         if len(self.words) > 1:
@@ -117,19 +123,22 @@ class Session:
 
     # ------------------------------------------------------------------ tầng ViT5
     def refine_requests(self) -> list[tuple[int, str, list[str], list[float]]]:
-        """Các từ chưa khóa cần mô hình chấm: (vị trí, câu nguồn, các câu ứng viên, điểm từ điển)."""
-        src = " ".join(w.raw for w in self.words)
+        """Các từ chưa khóa cần mô hình chấm: (vị trí, câu nguồn, các câu ứng viên, điểm từ điển).
+        Mô hình chỉ thấy câu chứa từ đó (tách theo . ! ?), không phải cả tin nhắn."""
         out = []
-        for i, w in enumerate(self.words):
-            if w.locked or len(w.options) < 2:
-                continue
-            base = [x.best for x in self.words]
-            cands, priors = [], []
-            for c, s in w.options[:self.k]:
-                base[i] = c
-                cands.append(" ".join(base))
-                priors.append(s)
-            out.append((i, src, cands, priors))
+        for i0, i1 in self.segments():
+            seg = self.words[i0:i1]
+            src = " ".join(w.raw for w in seg)
+            for j, w in enumerate(seg):
+                if w.locked or len(w.options) < 2:
+                    continue
+                base = [x.best for x in seg]
+                cands, priors = [], []
+                for c, s in w.options[:self.k]:
+                    base[j] = c
+                    cands.append(" ".join(base))
+                    priors.append(s)
+                out.append((i0 + j, src, cands, priors))
         return out
 
     def apply_refine(self, requests, scores: list[list[float]]) -> None:
@@ -171,12 +180,48 @@ class Session:
         return " ".join(match_case(w.raw, w.best) if accept_best else w.shown for w in self.words)
 
     # ------------------------------------------------------------------ cả câu cho danh sách gợi ý
-    def sentences(self, text: str, n: int = 3) -> list[dict]:
-        """Tối đa n câu hoàn chỉnh để người dùng bấm chọn. `text` là chữ trong ô nhập lúc `sync` gần nhất.
-        Từ chưa chắc có tối đa `top` phương án, các từ khác giữ phương án đầu; xếp theo tổng độ lệch điểm so với phương án
-        đầu của từng từ. Chữ giữa các từ và từ đang gõ dở giữ nguyên như trong ô nhập."""
+    def _is_end(self, w: Word) -> bool:
+        t = self.text_now
+        between_digits = t[w.start - 1:w.start].isdigit() and t[w.end:w.end + 1].isdigit()  # "3.5" không phải hết câu
+        return w.raw in END and not between_digits
+
+    def segments(self) -> list[tuple[int, int]]:
+        """Các câu trong tin nhắn dạng khoảng chỉ số từ [đầu, cuối); dấu kết thúc thuộc câu trước nó.
+        Luôn có một câu cuối (có thể rỗng: vừa gõ dấu chấm, chưa xong từ nào của câu mới)."""
+        out, i0 = [], 0
+        for i, w in enumerate(self.words):
+            if self._is_end(w):
+                out.append((i0, i + 1))
+                i0 = i + 1
+        out.append((i0, len(self.words)))
+        return out
+
+    def active(self, caret: int | None = None) -> tuple[int, int]:
+        """Câu chứa con trỏ (mặc định câu cuối, nơi đang gõ)."""
+        segs = self.segments()
+        if caret is None:
+            return segs[-1]
+        found = segs[0]
+        for i0, i1 in segs:
+            start = self.words[i0].start if i0 < len(self.words) else (self.words[-1].end if self.words else 0)
+            if start <= caret:
+                found = (i0, i1)
+        return found
+
+    def sentences(self, text: str | None = None, n: int = 3, caret: int | None = None) -> list[dict]:
+        """Tối đa n phương án cho CÂU chứa con trỏ, để người dùng bấm chọn: {"text", "picks", "start", "end", "first"}.
+        "text" thay cho đoạn [start, end) của ô nhập; "first" là chỉ số từ đầu câu. Từ chưa chắc có tối đa `top` phương
+        án, các từ khác giữ phương án đầu; xếp theo tổng độ lệch điểm so với phương án đầu của từng từ. Chữ giữa các từ và
+        từ đang gõ dở giữ nguyên như trong ô nhập. Câu chưa có từ nào gõ xong thì không có phương án."""
+        text = self.text_now if text is None else text
+        i0, i1 = self.active(caret)
+        if i0 == i1:
+            return []
+        seg = self.words[i0:i1]
+        start = seg[0].start
+        end = len(text) if i1 == len(self.words) else seg[-1].end  # câu cuối gồm cả từ đang gõ dở
         beams: list[tuple[float, list[str]]] = [(0.0, [])]
-        for w in self.words:
+        for w in seg:
             if w.chosen:
                 alts = [(w.chosen, 0.0)]
             elif self.uncertain(w):
@@ -187,26 +232,27 @@ class Session:
             beams = sorted(((d + dd, picks + [c]) for d, picks in beams for c, dd in alts), key=lambda x: x[0])[:n * 2]
         out, seen = [], set()
         for _, picks in beams:
-            sent = self.render(text, picks)
+            sent = self.render(text, seg, picks, start, end)
             if sent not in seen:
                 seen.add(sent)
-                out.append({"text": sent, "picks": picks})
+                out.append({"text": sent, "picks": picks, "start": start, "end": end, "first": i0})
             if len(out) == n:
                 break
         return out
 
-    def render(self, text: str, picks: list[str]) -> str:
-        pieces, last = [], 0
-        for w, c in zip(self.words, picks):
+    @staticmethod
+    def render(text: str, words: list[Word], picks: list[str], start: int, end: int) -> str:
+        pieces, last = [], start
+        for w, c in zip(words, picks):
             pieces += [text[last:w.start], match_case(w.raw, c)]
             last = w.end
-        return "".join(pieces) + text[last:]
+        return "".join(pieces) + text[last:end]
 
-    def pick(self, picks: list[str]) -> list[int]:
-        """Người dùng bấm một câu trong danh sách: chọn phương án cho từ chưa chắc hoặc khác chữ đang hiện.
-        Trả vị trí các từ đã chọn."""
-        changed = [i for i, (w, p) in enumerate(zip(self.words, picks))
+    def pick(self, picks: list[str], first: int = 0) -> list[int]:
+        """Người dùng bấm một câu trong danh sách (các từ từ vị trí `first`): chọn phương án cho từ chưa chắc hoặc khác chữ
+        đang hiện. Trả vị trí các từ đã chọn."""
+        changed = [first + j for j, (w, p) in enumerate(zip(self.words[first:], picks))
                    if not w.chosen and (p != w.shown.lower() or self.uncertain(w))]
         for i in changed:
-            self.choose(i, picks[i])
+            self.choose(i, picks[i - first])
         return changed

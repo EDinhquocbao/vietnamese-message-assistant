@@ -11,6 +11,9 @@ khi thuyết trình; demo Streamlit giữ nguyên làm dự phòng.
 - Bấm Gửi: chữ trong khung giữ nguyên; danh sách trồi lên hiện các câu đã sửa (mô hình sửa cả câu, tối đa 3) và 1 câu diễn
   đạt lại ý.
 
+- (Bổ sung cùng ngày) Gõ `.` `!` `?` `…` là sang câu mới: danh sách chỉ gợi ý cho câu chứa con trỏ (mặc định câu đang gõ);
+  bấm vào câu cũ để sửa riêng câu đó. Dấu chấm giữa hai chữ số không tính. Gửi vẫn sửa cả tin nhắn.
+
 ## Cách làm (một hướng hợp lý)
 Nâng cấp `app/realtime` (WebSocket). Streamlit không bắt được từng phím gõ nên bị loại.
 - `Session.sentences(text, n=3)`: ghép tối đa 3 câu từ phương án của từng từ; chỉ từ "chưa chắc" (`uncertain`) mới có

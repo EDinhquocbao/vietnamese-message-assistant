@@ -301,6 +301,15 @@ Log: `outputs/logs/realtime_history.jsonl` (`pick`, `send`, `use`).
 người không / con yêu qua người không / con yêu quá người học"; chọn bằng bàn phím; Gửi -> câu đã sửa sau ~0,4 s, câu diễn đạt sau
 ~1,4 s (lần đầu sau khi nạp mô hình chậm hơn, vài giây). 119 test đạt.
 
+**Tách câu theo dấu kết thúc** (người dùng đề xuất cùng ngày, giống cách nhắn tin thật): gõ `.` `!` `?` `…` xong là danh sách
+chuyển sang câu mới, chỉ gợi ý cho các từ sau dấu đó (`Session.segments`, `Session.active`); dấu chấm giữa hai chữ số (`3.5`)
+không tính. Bấm con trỏ vào câu cũ (hoặc phím mũi tên/Home/End) thì danh sách hiện phương án cho riêng câu đó; chọn xong chỉ đoạn
+đó bị thay. Tầng ViT5 cũng chỉ chấm câu chứa từ (nhanh hơn với tin dài), và từ viết hoa đầu câu không còn bị coi là tên riêng.
+Gửi vẫn sửa cả tin nhắn. Đã thử: `chi oi e gui bai r a. c check giup e vs nhe ` -> danh sách chỉ có câu hai; bấm vào câu đầu ->
+"chị ơi em gửi bài rồi á. / ... rồi ạ. / ... rồi anh."; chọn xong câu hai giữ nguyên. Chạy lại giả lập 300 câu sau thay đổi:
+mọi chỉ số độ đúng giữ nguyên như Vòng 7 (câu test gần như chỉ một câu); tầng ViT5 p50/p95 khoảng 60/76 ms so với 92/121 ms trước
+đó (chưa tách được phần nhờ chấm từng câu với phần do GPU rảnh hơn lúc đo).
+
 Hạn chế thấy khi thử: câu diễn đạt lại vẫn hay đổi nghĩa ("mai em nghỉ học nha chị, em bị ốm rồi" -> "Em sẽ được nghỉ học nha chị và
 em bị ốm sau khi nghỉ học vào ngày mai."), đúng với kết quả chấm thủ công 35%; vài viết tắt một chữ cái vẫn đoán sai ở gợi ý đầu
 ("c" -> "có" thay vì "chị", "a" -> "anh" thay vì "ạ").

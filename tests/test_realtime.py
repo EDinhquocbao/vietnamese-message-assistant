@@ -119,6 +119,44 @@ def test_only_uncertain_words_vary_between_sentences(lex):
     assert all(r["text"].startswith("người ta ") for r in rows)  # Telex chắc chắn: không có phương án khác
 
 
+def test_full_stop_moves_suggestions_to_the_new_sentence(lex):
+    s = Session(lex)
+    s.sync("con yeu qua.")  # gõ dấu chấm xong là sang câu mới, chưa có từ nào -> không gợi ý
+    assert s.sentences() == []
+    text = "con yeu qua. di hoc "
+    s.sync(text)
+    rows = s.sentences()
+    assert rows and all(r["start"] == text.index("di") and r["first"] == 4 for r in rows)
+    assert all("con" not in r["text"] and r["text"].endswith(" ") for r in rows)
+
+
+def test_caret_in_an_earlier_sentence_shows_that_sentence(lex):
+    s = Session(lex)
+    text = "con yeu qua! di hoc "
+    s.sync(text)
+    rows = s.sentences(caret=5)
+    assert rows and all(r["start"] == 0 and r["end"] == text.index("!") + 1 for r in rows)
+    assert all(r["text"].endswith("!") for r in rows)
+    row = rows[0]
+    s.pick(row["picks"], row["first"])
+    new = row["text"] + text[row["end"]:]
+    s.sync(new)
+    assert s.text_now.startswith(row["text"]) and [w.raw for w in s.words[-2:]] == ["di", "hoc"]
+
+
+def test_decimal_point_does_not_end_a_sentence(lex):
+    s = Session(lex)
+    s.sync("con yeu 3.5 di ")
+    assert s.segments() == [(0, len(s.words))]
+
+
+def test_model_only_sees_the_sentence_of_each_word(lex):
+    s = Session(lex, lock_after=0)
+    s.sync("mai di hoc. con yeu qua ")
+    srcs = {src for _, src, _, _ in s.refine_requests()}
+    assert srcs <= {"mai di hoc .", "con yeu qua"}
+
+
 def test_picking_a_sentence_locks_its_words(lex):
     s = Session(lex)
     text = "con yeu qua "

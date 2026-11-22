@@ -45,7 +45,7 @@
       <button class="send" id="send" type="button" disabled>Gửi</button>
     </div>
   </div>
-  <p class="hint" id="hint">Gõ xong một từ thì nhấn dấu cách để nhận gợi ý. Enter để gửi, Shift+Enter để xuống dòng, Esc để ẩn gợi ý.</p>
+  <p class="hint" id="hint">Gõ xong một từ thì nhấn dấu cách để nhận gợi ý; gõ . ! ? là sang câu mới (bấm vào câu cũ để sửa lại). Enter để gửi, Shift+Enter để xuống dòng, Esc để ẩn gợi ý.</p>
 </main>
 <script>
   const input = document.getElementById('input');
@@ -63,7 +63,13 @@
   let items = [], active = -1;             // các dòng đang hiện trong danh sách
 
   function post(obj) { if (ws && ws.readyState === 1) ws.send(JSON.stringify(obj)); }
-  function update() { updSeq = ++seq; post({ type: 'update', seq: updSeq, text: input.value }); }
+  function update() { updSeq = ++seq; post({ type: 'update', seq: updSeq, text: input.value, caret: input.selectionStart }); }
+  // Con trỏ chuyển chỗ mà chữ không đổi: server gợi ý lại cho câu chứa con trỏ.
+  function caretMoved() {
+    if (mode !== 'typing') return;
+    dismissed = false;
+    updSeq = ++seq; post({ type: 'caret', seq: updSeq, caret: input.selectionStart });
+  }
   function schedulePause() { clearTimeout(pauseTimer); pauseTimer = setTimeout(() => post({ type: 'pause', seq: updSeq }), PAUSE_MS); }
 
   function connect() {
@@ -124,8 +130,8 @@
   }
 
   // In đậm những từ khác với chữ đang có trong ô nhập (khi hai câu cùng số từ).
-  function rowContent(el, text) {
-    const a = text.split(' '), b = input.value.split(' ');
+  function rowContent(el, text, base) {
+    const a = text.split(' '), b = base.split(' ');
     if (a.length !== b.length) { el.textContent = text; return; }
     a.forEach((tok, i) => {
       if (i) el.append(' ');
@@ -135,10 +141,10 @@
 
   function addLabel(text) { const d = document.createElement('div'); d.className = 'label'; d.textContent = text; pop.append(d); }
   function addNote(text) { const d = document.createElement('div'); d.className = 'note'; d.textContent = text; pop.append(d); }
-  function addRow(text, onPick) {
+  function addRow(text, onPick, base = input.value) {
     const b = document.createElement('button');
     b.type = 'button'; b.className = 'row'; b.setAttribute('role', 'option');
-    rowContent(b, text);
+    rowContent(b, text, base);
     b.addEventListener('mousedown', (e) => e.preventDefault());  // giữ con trỏ trong ô nhập
     b.addEventListener('click', onPick);
     pop.append(b);
@@ -148,10 +154,12 @@
   function drawPop() {
     pop.replaceChildren(); items = []; active = -1;
     if (mode === 'typing') {
-      const useful = rows.length > 1 || (rows.length === 1 && rows[0].text !== input.value);
+      // chỉ câu chứa con trỏ: mỗi dòng thay cho đoạn [start, end) của ô nhập
+      const current = (r) => input.value.slice(r.start, r.end);
+      const useful = rows.length > 1 || (rows.length === 1 && rows[0].text !== current(rows[0]));
       if (dismissed || !input.value.trim() || !useful) { pop.hidden = true; return; }
-      addLabel('Gợi ý cả câu');
-      rows.forEach((r, i) => addRow(r.text, () => pickTyping(i)));
+      addLabel('Gợi ý cho câu này');
+      rows.forEach((r, i) => addRow(r.text, () => pickTyping(i), current(r)));
     } else {
       addLabel('Câu đã sửa');
       if (!sent.fixes) addNote('Đang sửa...');
@@ -178,8 +186,11 @@
 
   function pickTyping(i) {
     const r = rows[i];
-    post({ type: 'pick', text: input.value, picks: r.picks, chosen: r.text, rank: i, rows: rows.map(x => x.text) });
-    setText(r.text);
+    post({ type: 'pick', text: input.value, picks: r.picks, first: r.first, chosen: r.text, rank: i, rows: rows.map(x => x.text) });
+    replaceRange(r.start, r.end, r.text);
+    const at = r.start + r.text.length;
+    input.setSelectionRange(at, at);
+    resize(); drawMirror();
     update(); schedulePause();
     input.focus();
   }
@@ -214,6 +225,11 @@
     resize(); drawMirror(); update(); schedulePause();
   });
   input.addEventListener('scroll', () => { mirror.scrollTop = input.scrollTop; });
+  input.addEventListener('click', caretMoved);
+  input.addEventListener('keyup', (e) => {
+    const nav = ['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(e.key) || (pop.hidden && ['ArrowUp', 'ArrowDown'].includes(e.key));
+    if (nav) caretMoved();
+  });
   input.addEventListener('keydown', (e) => {
     const open = !pop.hidden && items.length;
     if (e.key === 'Escape') { dismissed = true; pop.hidden = true; if (mode === 'sent') mode = 'typing'; return; }

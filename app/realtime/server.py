@@ -77,11 +77,13 @@ class App:
         p = self.params
         session = Session(self.lex, k=p["k"], alpha=p["alpha"], beta=p["beta"])
         loop = asyncio.get_running_loop()
-        latest, text = 0, ""
+        latest, caret = 0, None
 
         async def send_state(seq, ms=None, model_ms=None):
-            await ws.send(json.dumps({"type": "state", "seq": seq, "words": session.state(), "rows": session.sentences(text),
-                                      "ms": ms, "model_ms": model_ms}, ensure_ascii=False))
+            # danh sách gợi ý chỉ cho câu chứa con trỏ (tách câu theo . ! ?)
+            await ws.send(json.dumps({"type": "state", "seq": seq, "words": session.state(),
+                                      "rows": session.sentences(caret=caret), "ms": ms, "model_ms": model_ms},
+                                     ensure_ascii=False))
 
         async def refine(reqs, seq):
             t0 = time.perf_counter()
@@ -106,16 +108,19 @@ class App:
             data = json.loads(message)
             kind = data["type"]
             if kind == "update":
-                latest, text = data["seq"], data["text"]
+                latest, caret = data["seq"], data.get("caret")
                 t0 = time.perf_counter()
-                session.sync(text)
+                session.sync(data["text"])
                 await send_state(latest, ms=round((time.perf_counter() - t0) * 1000, 1))
+            elif kind == "caret":  # con trỏ chuyển sang câu khác mà chữ không đổi
+                latest, caret = data["seq"], data["caret"]
+                await send_state(latest)
             elif kind == "pause":
                 reqs = session.refine_requests() if data["seq"] == latest else []
                 if reqs:
                     asyncio.create_task(refine(reqs, latest))
             elif kind == "pick":  # bấm một câu trong danh sách lúc đang gõ; trang sẽ gửi "update" với câu mới ngay sau
-                session.pick(data["picks"])
+                session.pick(data["picks"], data["first"])
                 log_event({"event": "pick", "context": data["text"], "chosen": data["chosen"], "rank": data["rank"],
                            "rows": data["rows"]})
             elif kind == "send":
