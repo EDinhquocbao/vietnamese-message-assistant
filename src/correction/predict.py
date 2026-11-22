@@ -99,6 +99,25 @@ class Corrector:
     def __call__(self, texts: list[str]) -> list[str]:
         return [c[0] for c in self.generate_many(texts, num_beams=self.num_beams)]
 
+    @torch.no_grad()
+    def score_pairs(self, sources: list[str], candidates: list[str]) -> list[float]:
+        """log P(câu ứng viên | câu nguồn) của từng cặp: một lượt forward, không beam search."""
+        order = sorted(range(len(sources)), key=lambda i: len(sources[i]) + len(candidates[i]))
+        out = [0.0] * len(sources)
+        step = max(1, self.batch_size // 2)  # logits đầy đủ tốn VRAM hơn beam search; GPU 6 GB từng suýt tràn với cả lô
+        for k in range(0, len(order), step):
+            idx = order[k:k + step]
+            enc = self.tok([normalize_text(sources[i]) for i in idx], padding=True, return_tensors="pt").to(self.device)
+            labels = self.tok([normalize_text(candidates[i]) for i in idx], padding=True,
+                              return_tensors="pt").input_ids.to(self.device)
+            labels[labels == self.tok.pad_token_id] = -100
+            logits = self.model(input_ids=enc["input_ids"], attention_mask=enc["attention_mask"], labels=labels).logits
+            loss = torch.nn.functional.cross_entropy(logits.float().transpose(1, 2), labels, ignore_index=-100,
+                                                     reduction="none").sum(-1)
+            for i, v in zip(idx, loss.tolist()):
+                out[i] = -v
+        return out
+
 
 def merge_nbest(cands: list[tuple[str, float]]) -> list[dict]:
     """Softmax trên log-prob của các phương án, gộp phương án trùng chữ. GIỮ thứ tự beam search (chuẩn hóa

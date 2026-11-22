@@ -1,0 +1,16 @@
+# Từ điển đề xuất ứng viên + mô hình chọn (src/lexicon). Chọn tham số trên VAL: python -m src.lexicon.evaluate_hybrid tune
+lexicon_path: data/processed/lexicon/lexicon.json
+correction_config: configs/correction_stage2.yaml
+# Trên val: Viet74K chỉ thêm 0,13 điểm độ phủ và không đổi F0.5 (0,8150 so với 0,8142) nên không dùng;
+# từ điển viết tắt thêm 1,2 điểm độ phủ nên giữ.
+use_syllables: false
+use_nsw: true
+
+params:
+  # Các giá trị dưới đây chọn trên val (outputs/metrics/hybrid_tuning.json), mục tiêu F0.5.
+  k: 10           # số ứng viên tối đa mỗi từ trong lưới
+  n: 8            # số câu ghép đưa cho mô hình chấm
+  alpha: 2.0      # trọng số điểm kênh nhiễu so với bigram khi ghép câu (giá trị lớn nhất đã thử)
+  beta: 1.0       # trọng số điểm từ điển khi cộng với điểm mô hình (rerank)
+  penalty: -8.0   # điểm cho phép sửa ngoài từ điển (rerank)
+  guard_k: 20     # số ứng viên chấp nhận ở chế độ guard; null = mọi ứng viên

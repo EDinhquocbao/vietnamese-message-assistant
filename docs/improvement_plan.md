@@ -36,6 +36,7 @@ Trạng thái: ✅ xong · 🔄 đang làm · ⏳ chưa làm · 💤 để sau (
 | 17 | **[Ưu tiên 3]** Đánh giá thủ công: chuẩn bị file + rubric 0/1 (giữ nghĩa, tự nhiên, không thêm/bỏ ý) cho 50–100 gợi ý; NGƯỜI DÙNG chấm (~1 giờ); tính Top-1/Top-3 chấp nhận | ✅ | Người dùng chấm 85 gợi ý: Top-1 35%, Top-3 52,5%; chấm tự động cho đạt 87% -> không tin được, xem "Vòng 6" |
 | 18 | Duyệt tập kiểm thử tích hợp (41 câu `status=draft`) hoặc ghi rõ trong báo cáo là chỉ tham khảo | ✅ | Người dùng giữ cả 41 câu -> `status=approved`; kết quả tích hợp không đổi (EM 87,8%) |
 | 19 | Viết báo cáo + slide từ mục 14 file plan và các kết quả trên | ⏸️ | Chờ người dùng có mẫu báo cáo + phiếu chấm của giảng viên (định dạng, độ dài, slide quyết theo mẫu). Đã chốt nhấn mạnh cả 4: quy trình & phát hiện, cải tiến mô hình, demo & ứng dụng, hạn chế trung thực |
+| 20 | Bản thử gợi ý ngay tại từ: từ điển đề xuất ứng viên, ViT5 chọn, gợi ý sau mỗi từ (nhánh `feat/lexicon-realtime`, chưa gộp `main`) | 🧪 | Xong bản thử, xem "Vòng 7". Chế độ kết hợp không đạt điều kiện giữ; mô hình sửa cả câu vẫn là A |
 
 ## Kết quả vòng 1 (26/10/2026)
 
@@ -237,3 +238,46 @@ Nhận xét:
   hoặc ưu tiên gợi ý gần câu gốc hơn.
 - Người chấm nhận xét thêm: khi 3 gợi ý cùng nghĩa thì đưa 3 câu là thừa (M31).
 - Giới hạn: một người chấm, 40 tin nhắn; không có độ đồng thuận giữa người chấm.
+
+## Vòng 7: từ điển đề xuất, mô hình chọn và gợi ý sau mỗi từ (#20, 09/11/2026)
+
+Mục tiêu: gợi ý ngay tại từ sai và giữ nguyên cách nói. Không train lại; demo Streamlit và bước diễn đạt lại giữ nguyên.
+Lệnh: `python -m src.lexicon.build`, `python -m src.lexicon.evaluate_hybrid tune|test`, `python -m src.realtime.simulate --n 300`,
+`python -m app.realtime.server` (http://localhost:8765). Kết quả: `outputs/metrics/hybrid_*.json`, `hybrid_comparison.md`,
+`realtime_simulation.json`.
+
+Từ điển: bảng từ gốc -> từ đúng, unigram, bigram trích chỉ từ `correction/train`; thêm `vi-nsw-dict` (không ghi giấy phép, chỉ dùng
+cục bộ). `kcj` không có trong nguồn nào nên thêm tay (`EXTRA_NSW`). Viet74K bị bỏ: chỉ thêm 0,13 điểm độ phủ (96,89% so với 96,77%),
+F0.5 không cải thiện. Tham số chọn trên val 1.847 câu: k=10, alpha=2 (biên lưới đã thử), beta=1, penalty=−8, guard_k=20.
+
+| WER / câu đúng hết / sửa quá tay | A. Mô hình | B. Chỉ từ điển | C. Lá chắn | D. Chọn lại |
+|---|---|---|---|---|
+| ViLexNorm test | 3,74% / 68,4% / 14,3% | 5,59% / 58,0% / 29,1% | 3,76% / 69,6% / 10,6% | **3,25% / 72,3% / 11,1%** |
+| VSEC test | **1,16% / 70,1%** / 4,1% | 2,14% / 53,9% / 19,5% | 1,25% / 68,0% / 3,2% | 1,40% / 62,7% / 2,1% |
+| VEC test (tham khảo) | 7,69% / 52,6% / 9,2% | 11,29% / 34,5% / 27,9% | 8,40% / 50,4% / 6,6% | 6,87% / 52,9% / 6,1% |
+| Stress không dấu: câu đúng | 45,8% | 28,5% | 46,5% | 43,5% |
+| Stress gõ nhanh: câu đúng | **26,8%** | 9,8% | 22,8% | 21,2% |
+
+Chế độ A khớp số cũ (ViLexNorm WER 3,74%, câu đúng 68,4%). Riêng gõ nhanh lần này 26,8% so với 26,5% ở Vòng 3 (chênh khoảng 1 câu
+trên 400), không đổi kết luận.
+
+Điều kiện giữ C/D (đặt trước khi chạy test): WER ViLexNorm không tệ hơn A; sửa quá tay ViLexNorm thấp hơn A; gõ nhanh giảm ≤ 1 điểm.
+C trượt 2 điều kiện (WER 3,76%; gõ nhanh −4,0 điểm); D trượt điều kiện 3 (−5,6 điểm) và tệ hơn A trên VSEC. -> **Giữ A.**
+
+Gợi ý sau mỗi từ, giả lập 300 câu ViLexNorm test (4–25 từ), tầng từ điển + ViT5 (A); "chọn đúng" là cận trên:
+
+| Đầu vào | Chưa sửa WER | Nhận gợi ý đầu WER / câu đúng | Chọn đúng WER / câu đúng | Từ sai: top-1 / top-3 | Chạm mỗi câu | Gợi ý đầu bị đổi mỗi câu |
+|---|---|---|---|---|---|---|
+| ViLexNorm test | 18,4% | 3,5% / 73,3% | 2,4% / 88,0% | 90,1% / 96,6% | 1,7 | 0,9 |
+| Bỏ hết dấu | 74,9% | 14,0% / 31,7% | 3,6% / 71,0% | 84,0% / 95,1% | 8,2 | 3,2 |
+| Gõ nhanh | 77,2% | 20,4% / 13,3% | 9,6% / 35,0% | 76,1% / 87,7% | 7,7 | 4,1 |
+
+Độ trễ: tầng từ điển p95 < 0,5 ms (mục tiêu 20 ms); tầng ViT5 p50 ~92 ms, p95 ~121 ms (mục tiêu 500 ms). Trên trang thử: 65–211 ms,
+riêng lần đầu sau khi nạp mô hình 640–720 ms.
+
+Đã kiểm tra trên trình duyệt tích hợp: `con yeu qua ` (gạch chân, gợi ý yêu/quá), `nguowif ` -> người tự đổi, `kcj ` -> chọn "không có gì"
+rồi gõ tiếp, `conf ` -> còn; từ đã chọn không đổi lại. Phát hiện khi thử và đã sửa: từ bị khóa làm mất gợi ý nên gõ nhanh không sửa
+được nữa; nay khóa chỉ dừng xếp lại, gợi ý đầu khác chữ đang hiện thì vẫn chọn được.
+
+Hạn chế: câu không dấu/gõ nhanh cần ~8 lần chạm; `cnof` (đảo chữ chồng Telex) chưa ra `còn`; chỉ gợi ý sau mỗi từ, chưa theo ký tự;
+số giả lập trên 300 câu không so trực tiếp với bảng toàn tập test; chưa có người thật gõ thử.

@@ -1,0 +1,143 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Gợi ý khi gõ</title>
+<style>
+  :root { --bg:#f7f6f2; --card:#fff; --ink:#23262b; --muted:#6a6f78; --line:#dcdad3; --accent:#1f6f5c; --accent-soft:#e2f0ec; --warn:#c2571a; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--ink); font:16px/1.55 "Segoe UI",system-ui,sans-serif; }
+  main { max-width:680px; margin:0 auto; padding:32px 16px 48px; }
+  h1 { font-size:22px; margin:0 0 4px; }
+  .sub { color:var(--muted); margin:0 0 20px; }
+  textarea { width:100%; min-height:96px; padding:12px 14px; font:inherit; color:inherit; background:var(--card); border:1px solid var(--line); border-radius:8px; resize:vertical; }
+  textarea:focus { outline:2px solid var(--accent); outline-offset:1px; }
+  h2 { font-size:13px; color:var(--muted); margin:20px 0 6px; font-weight:600; }
+  #preview { min-height:44px; padding:10px 14px; background:var(--card); border:1px solid var(--line); border-radius:8px; }
+  .w { padding:0 1px; }
+  .w.u { border-bottom:2px solid var(--warn); }
+  .w.a { background:var(--accent-soft); border-radius:3px; }
+  .w.c { color:var(--accent); font-weight:600; }
+  .row { display:flex; flex-wrap:wrap; align-items:center; gap:6px; padding:6px 0; border-bottom:1px solid var(--line); }
+  .row:last-child { border-bottom:0; }
+  .row b { min-width:64px; font-weight:600; }
+  button { font:inherit; padding:3px 12px; background:var(--card); color:var(--ink); border:1px solid var(--line); border-radius:999px; cursor:pointer; }
+  button:hover { border-color:var(--accent); }
+  button:focus-visible { outline:2px solid var(--accent); }
+  button.top { background:var(--accent-soft); border-color:var(--accent); }
+  .empty, #status { color:var(--muted); font-size:14px; }
+  #status { margin-top:16px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Gợi ý khi gõ</h1>
+  <p class="sub">Hệ thống sửa lỗi tin nhắn tiếng Việt. Gõ xong một từ, nhấn dấu cách để nhận gợi ý.</p>
+  <textarea id="input" autofocus spellcheck="false" placeholder="Thử gõ: con yeu qua "></textarea>
+  <h2>Câu hiện tại (gạch cam: chưa chắc, nền xanh: đã tự đổi Telex)</h2>
+  <div id="preview"></div>
+  <h2>Chọn từ đúng ý bạn</h2>
+  <div id="choices"><p class="empty">Chưa có từ nào cần chọn.</p></div>
+  <p id="status">Đang kết nối...</p>
+</main>
+<script>
+  const input = document.getElementById('input');
+  const preview = document.getElementById('preview');
+  const choices = document.getElementById('choices');
+  const status = document.getElementById('status');
+  const PAUSE_MS = 350;
+  let ws, seq = 0, pauseTimer = null, words = [];
+
+  function send(type, extra) {
+    if (ws && ws.readyState === 1) ws.send(JSON.stringify({ type, seq: ++seq, text: input.value, ...extra }));
+  }
+
+  function connect() {
+    ws = new WebSocket(`ws://${location.host}/ws`);
+    ws.onopen = () => { status.textContent = 'Đã kết nối.'; if (input.value) send('update'); };
+    ws.onclose = () => { status.textContent = 'Mất kết nối, đang thử lại...'; setTimeout(connect, 1500); };
+    ws.onmessage = (e) => {
+      const m = JSON.parse(e.data);
+      if (m.seq !== seq) return;                 // kết quả cũ, người dùng đã gõ tiếp
+      words = m.words;
+      if (applyAuto()) return;                   // đã đổi chữ thì chờ kết quả mới
+      render();
+      if (m.ms != null) status.textContent = `Từ điển: ${m.ms} ms`;
+      if (m.model_ms != null) status.textContent = `Mô hình chấm lại: ${m.model_ms} ms`;
+    };
+  }
+
+  // Thay đoạn [start, end) trong ô nhập, giữ nguyên vị trí con trỏ tương đối.
+  function replaceRange(start, end, text) {
+    const pos = input.selectionStart;
+    input.value = input.value.slice(0, start) + text + input.value.slice(end);
+    const delta = text.length - (end - start);
+    const next = pos >= end ? pos + delta : Math.min(pos, start + text.length);
+    input.setSelectionRange(next, next);
+  }
+
+  // Telex chắc chắn: đổi ngay trong ô nhập.
+  function applyAuto() {
+    let changed = false;
+    for (const w of [...words].reverse()) {
+      if (w.auto && input.value.slice(w.start, w.end) === w.raw) {
+        replaceRange(w.start, w.end, w.shown);
+        changed = true;
+      }
+    }
+    if (changed) send('update');
+    return changed;
+  }
+
+  function render() {
+    preview.replaceChildren();
+    words.forEach((w, idx) => {
+      const span = document.createElement('span');
+      span.className = 'w' + (w.uncertain ? ' u' : '') + (w.auto ? ' a' : '');
+      span.textContent = w.shown;
+      preview.append(span);
+      if (idx + 1 < words.length && !/^[.,!?;:)]/.test(words[idx + 1].shown)) preview.append(' ');
+    });
+    const pending = words.filter(w => w.uncertain);
+    choices.replaceChildren();
+    if (!pending.length) {
+      const p = document.createElement('p');
+      p.className = 'empty';
+      p.textContent = 'Chưa có từ nào cần chọn.';
+      choices.append(p);
+      return;
+    }
+    for (const w of pending) {
+      const row = document.createElement('div');
+      row.className = 'row';
+      const label = document.createElement('b');
+      label.textContent = w.shown;
+      row.append(label);
+      w.options.forEach((opt, i) => {
+        const b = document.createElement('button');
+        b.textContent = opt;
+        if (i === 0) b.className = 'top';
+        b.onclick = () => choose(w, opt);
+        row.append(b);
+      });
+      choices.append(row);
+    }
+  }
+
+  function choose(w, option) {
+    replaceRange(w.start, w.end, option);
+    send('choose', { i: w.i, option });
+    input.focus();
+  }
+
+  input.addEventListener('input', () => {
+    send('update');
+    clearTimeout(pauseTimer);
+    pauseTimer = setTimeout(() => send('pause'), PAUSE_MS);
+  });
+
+  connect();
+</script>
+</body>
+</html>
