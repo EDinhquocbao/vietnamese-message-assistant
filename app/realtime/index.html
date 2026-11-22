@@ -3,72 +3,90 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Gợi ý khi gõ</title>
+<title>Hệ thống sửa lỗi tin nhắn tiếng Việt</title>
 <style>
-  :root { --bg:#f7f6f2; --card:#fff; --ink:#23262b; --muted:#6a6f78; --line:#dcdad3; --accent:#1f6f5c; --accent-soft:#e2f0ec; --warn:#c2571a; }
-  * { box-sizing:border-box; }
-  body { margin:0; background:var(--bg); color:var(--ink); font:16px/1.55 "Segoe UI",system-ui,sans-serif; }
-  main { max-width:680px; margin:0 auto; padding:32px 16px 48px; }
-  h1 { font-size:22px; margin:0 0 4px; }
-  .sub { color:var(--muted); margin:0 0 20px; }
-  textarea { width:100%; min-height:96px; padding:12px 14px; font:inherit; color:inherit; background:var(--card); border:1px solid var(--line); border-radius:8px; resize:vertical; }
-  textarea:focus { outline:2px solid var(--accent); outline-offset:1px; }
-  h2 { font-size:13px; color:var(--muted); margin:20px 0 6px; font-weight:600; }
-  #preview { min-height:44px; padding:10px 14px; background:var(--card); border:1px solid var(--line); border-radius:8px; }
-  .w { padding:0 1px; }
-  .w.u { border-bottom:2px solid var(--warn); }
-  .w.a { background:var(--accent-soft); border-radius:3px; }
-  .w.c { color:var(--accent); font-weight:600; }
-  .row { display:flex; flex-wrap:wrap; align-items:center; gap:6px; padding:6px 0; border-bottom:1px solid var(--line); }
-  .row:last-child { border-bottom:0; }
-  .row b { min-width:64px; font-weight:600; }
-  button { font:inherit; padding:3px 12px; background:var(--card); color:var(--ink); border:1px solid var(--line); border-radius:999px; cursor:pointer; }
-  button:hover { border-color:var(--accent); }
-  button:focus-visible { outline:2px solid var(--accent); }
-  button.top { background:var(--accent-soft); border-color:var(--accent); }
-  .empty, #status { color:var(--muted); font-size:14px; }
-  #status { margin-top:16px; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: #fff; color: #111; }
+  body { font: 17px/1.5 "Segoe UI", system-ui, sans-serif; }
+  main { max-width: 640px; min-height: 100%; margin: 0 auto; padding: 16px 16px 22vh; display: flex; flex-direction: column; justify-content: flex-end; }
+
+  .composer { position: relative; }
+  .box { display: flex; align-items: flex-end; gap: 8px; padding: 8px 8px 8px 16px; border: 1px solid #cfcfcf; border-radius: 22px; }
+  .box:focus-within { border-color: #888; }
+  .field { position: relative; flex: 1; min-width: 0; }
+  .field textarea, .field .mirror { margin: 0; padding: 4px 0; font: inherit; letter-spacing: normal; white-space: pre-wrap; overflow-wrap: break-word; word-break: normal; }
+  .field textarea { position: relative; z-index: 1; display: block; width: 100%; height: 34px; max-height: 40vh; border: 0; outline: 0; resize: none; background: transparent; color: inherit; overflow-y: auto; }
+  .field .mirror { position: absolute; inset: 0; color: transparent; pointer-events: none; overflow: hidden; }
+  .mirror .u { text-decoration: underline wavy #c33; text-decoration-skip-ink: none; text-underline-offset: 5px; }
+  .send { flex: none; height: 34px; padding: 0 16px; font: inherit; font-size: 15px; color: #111; background: #fff; border: 1px solid #cfcfcf; border-radius: 17px; cursor: pointer; }
+  .send:hover { border-color: #888; }
+  .send:disabled { color: #aaa; cursor: default; border-color: #e5e5e5; }
+
+  .pop { position: absolute; left: 0; right: 0; bottom: calc(100% + 8px); background: #fff; border: 1px solid #d6d6d6; border-radius: 14px; box-shadow: 0 4px 16px rgba(0,0,0,.08); padding: 6px 0; max-height: 60vh; overflow-y: auto; }
+  .pop[hidden] { display: none; }
+  .label { padding: 6px 16px 2px; font-size: 13px; color: #777; }
+  .row { display: block; width: 100%; padding: 8px 16px; font: inherit; text-align: left; color: #111; background: #fff; border: 0; cursor: pointer; }
+  .row:hover, .row.active { background: #f2f2f2; }
+  .row b { font-weight: 600; }
+  .note { padding: 8px 16px; font-size: 15px; color: #888; }
+
+  .hint { margin: 10px 4px 0; font-size: 13px; color: #888; }
 </style>
 </head>
 <body>
 <main>
-  <h1>Gợi ý khi gõ</h1>
-  <p class="sub">Hệ thống sửa lỗi tin nhắn tiếng Việt. Gõ xong một từ, nhấn dấu cách để nhận gợi ý.</p>
-  <textarea id="input" autofocus spellcheck="false" placeholder="Thử gõ: con yeu qua "></textarea>
-  <h2>Câu hiện tại (gạch cam: chưa chắc, nền xanh: đã tự đổi Telex)</h2>
-  <div id="preview"></div>
-  <h2>Chọn từ đúng ý bạn</h2>
-  <div id="choices"><p class="empty">Chưa có từ nào cần chọn.</p></div>
-  <p id="status">Đang kết nối...</p>
+  <div class="composer">
+    <div class="pop" id="pop" role="listbox" aria-label="Gợi ý" hidden></div>
+    <div class="box">
+      <div class="field">
+        <div class="mirror" id="mirror" aria-hidden="true"></div>
+        <textarea id="input" rows="1" autofocus spellcheck="false" placeholder="Nhập tin nhắn" aria-label="Tin nhắn"></textarea>
+      </div>
+      <button class="send" id="send" type="button" disabled>Gửi</button>
+    </div>
+  </div>
+  <p class="hint" id="hint">Gõ xong một từ thì nhấn dấu cách để nhận gợi ý. Enter để gửi, Shift+Enter để xuống dòng, Esc để ẩn gợi ý.</p>
 </main>
 <script>
   const input = document.getElementById('input');
-  const preview = document.getElementById('preview');
-  const choices = document.getElementById('choices');
-  const status = document.getElementById('status');
+  const mirror = document.getElementById('mirror');
+  const pop = document.getElementById('pop');
+  const sendBtn = document.getElementById('send');
+  const hint = document.getElementById('hint');
+  const HINT = hint.textContent;
   const PAUSE_MS = 350;
-  let ws, seq = 0, pauseTimer = null, words = [];
 
-  function send(type, extra) {
-    if (ws && ws.readyState === 1) ws.send(JSON.stringify({ type, seq: ++seq, text: input.value, ...extra }));
-  }
+  let ws, seq = 0, updSeq = 0, sendSeq = 0, pauseTimer = null;
+  let words = [], rows = [];               // trạng thái lúc đang gõ (từ server)
+  let mode = 'typing', dismissed = false;  // 'typing' | 'sent'
+  let sent = null;                         // {input, fixes: null|[], para: undefined|{text, reason}}
+  let items = [], active = -1;             // các dòng đang hiện trong danh sách
+
+  function post(obj) { if (ws && ws.readyState === 1) ws.send(JSON.stringify(obj)); }
+  function update() { updSeq = ++seq; post({ type: 'update', seq: updSeq, text: input.value }); }
+  function schedulePause() { clearTimeout(pauseTimer); pauseTimer = setTimeout(() => post({ type: 'pause', seq: updSeq }), PAUSE_MS); }
 
   function connect() {
     ws = new WebSocket(`ws://${location.host}/ws`);
-    ws.onopen = () => { status.textContent = 'Đã kết nối.'; if (input.value) send('update'); };
-    ws.onclose = () => { status.textContent = 'Mất kết nối, đang thử lại...'; setTimeout(connect, 1500); };
+    ws.onopen = () => { hint.textContent = HINT; if (input.value) update(); };
+    ws.onclose = () => { hint.textContent = 'Mất kết nối với hệ thống, đang thử lại...'; setTimeout(connect, 1500); };
     ws.onmessage = (e) => {
       const m = JSON.parse(e.data);
-      if (m.seq !== seq) return;                 // kết quả cũ, người dùng đã gõ tiếp
-      words = m.words;
-      if (applyAuto()) return;                   // đã đổi chữ thì chờ kết quả mới
-      render();
-      if (m.ms != null) status.textContent = `Từ điển: ${m.ms} ms`;
-      if (m.model_ms != null) status.textContent = `Mô hình chấm lại: ${m.model_ms} ms`;
+      if (m.type === 'state') {
+        if (m.seq !== updSeq) return;          // kết quả cũ, người dùng đã gõ tiếp
+        words = m.words; rows = m.rows;
+        if (applyAuto()) return;               // đã đổi chữ Telex thì chờ kết quả mới
+        drawMirror();
+        if (mode === 'typing') drawPop();
+      } else if (sent && m.seq === sendSeq) {
+        if (m.type === 'fixes') sent.fixes = m.rows;
+        if (m.type === 'para') sent.para = { text: m.text, reason: m.reason };
+        if (mode === 'sent') drawPop();
+      }
     };
   }
 
-  // Thay đoạn [start, end) trong ô nhập, giữ nguyên vị trí con trỏ tương đối.
+  // Thay đoạn [start, end) trong ô nhập, giữ con trỏ đúng chỗ.
   function replaceRange(start, end, text) {
     const pos = input.selectionStart;
     input.value = input.value.slice(0, start) + text + input.value.slice(end);
@@ -77,66 +95,145 @@
     input.setSelectionRange(next, next);
   }
 
-  // Telex chắc chắn: đổi ngay trong ô nhập.
+  // Telex chắc chắn ("nguowif" -> "người"): đổi ngay trong ô nhập.
   function applyAuto() {
     let changed = false;
     for (const w of [...words].reverse()) {
-      if (w.auto && input.value.slice(w.start, w.end) === w.raw) {
-        replaceRange(w.start, w.end, w.shown);
-        changed = true;
-      }
+      if (w.auto && input.value.slice(w.start, w.end) === w.raw) { replaceRange(w.start, w.end, w.shown); changed = true; }
     }
-    if (changed) send('update');
+    if (changed) { resize(); update(); }
     return changed;
   }
 
-  function render() {
-    preview.replaceChildren();
-    words.forEach((w, idx) => {
-      const span = document.createElement('span');
-      span.className = 'w' + (w.uncertain ? ' u' : '') + (w.auto ? ' a' : '');
-      span.textContent = w.shown;
-      preview.append(span);
-      if (idx + 1 < words.length && !/^[.,!?;:)]/.test(words[idx + 1].shown)) preview.append(' ');
-    });
-    const pending = words.filter(w => w.uncertain);
-    choices.replaceChildren();
-    if (!pending.length) {
-      const p = document.createElement('p');
-      p.className = 'empty';
-      p.textContent = 'Chưa có từ nào cần chọn.';
-      choices.append(p);
-      return;
+  // Lớp chữ trong suốt nằm dưới ô nhập, chỉ để vẽ gạch chân ở từ chưa chắc.
+  function drawMirror() {
+    const v = input.value;
+    mirror.replaceChildren();
+    let last = 0;
+    for (const w of words) {
+      if (!w.uncertain || w.start < last || v.slice(w.start, w.end) !== w.shown) continue;
+      mirror.append(v.slice(last, w.start));
+      const s = document.createElement('span');
+      s.className = 'u';
+      s.textContent = v.slice(w.start, w.end);
+      mirror.append(s);
+      last = w.end;
     }
-    for (const w of pending) {
-      const row = document.createElement('div');
-      row.className = 'row';
-      const label = document.createElement('b');
-      label.textContent = w.shown;
-      row.append(label);
-      w.options.forEach((opt, i) => {
-        const b = document.createElement('button');
-        b.textContent = opt;
-        if (i === 0) b.className = 'top';
-        b.onclick = () => choose(w, opt);
-        row.append(b);
-      });
-      choices.append(row);
-    }
+    mirror.append(v.slice(last) + '\n');
+    mirror.scrollTop = input.scrollTop;
   }
 
-  function choose(w, option) {
-    replaceRange(w.start, w.end, option);
-    send('choose', { i: w.i, option });
+  // In đậm những từ khác với chữ đang có trong ô nhập (khi hai câu cùng số từ).
+  function rowContent(el, text) {
+    const a = text.split(' '), b = input.value.split(' ');
+    if (a.length !== b.length) { el.textContent = text; return; }
+    a.forEach((tok, i) => {
+      if (i) el.append(' ');
+      if (tok !== b[i]) { const x = document.createElement('b'); x.textContent = tok; el.append(x); } else el.append(tok);
+    });
+  }
+
+  function addLabel(text) { const d = document.createElement('div'); d.className = 'label'; d.textContent = text; pop.append(d); }
+  function addNote(text) { const d = document.createElement('div'); d.className = 'note'; d.textContent = text; pop.append(d); }
+  function addRow(text, onPick) {
+    const b = document.createElement('button');
+    b.type = 'button'; b.className = 'row'; b.setAttribute('role', 'option');
+    rowContent(b, text);
+    b.addEventListener('mousedown', (e) => e.preventDefault());  // giữ con trỏ trong ô nhập
+    b.addEventListener('click', onPick);
+    pop.append(b);
+    items.push({ el: b, onPick });
+  }
+
+  function drawPop() {
+    pop.replaceChildren(); items = []; active = -1;
+    if (mode === 'typing') {
+      const useful = rows.length > 1 || (rows.length === 1 && rows[0].text !== input.value);
+      if (dismissed || !input.value.trim() || !useful) { pop.hidden = true; return; }
+      addLabel('Gợi ý cả câu');
+      rows.forEach((r, i) => addRow(r.text, () => pickTyping(i)));
+    } else {
+      addLabel('Câu đã sửa');
+      if (!sent.fixes) addNote('Đang sửa...');
+      else sent.fixes.forEach((t, i) => addRow(t, () => useSent('sua_loi', t, i)));
+      addLabel('Diễn đạt lại ý');
+      if (sent.para === undefined) addNote('Đang tìm cách diễn đạt...');
+      else if (sent.para.text) addRow(sent.para.text, () => useSent('dien_dat', sent.para.text, 0));
+      else addNote('Không có cách diễn đạt đủ tốt (' + sent.para.reason + ').');
+    }
+    pop.hidden = false;
+  }
+
+  function setActive(i) {
+    items.forEach((it, j) => it.el.classList.toggle('active', j === i));
+    active = i;
+    if (items[i]) items[i].el.scrollIntoView({ block: 'nearest' });
+  }
+
+  function setText(text) {
+    input.value = text;
+    input.setSelectionRange(text.length, text.length);
+    resize(); drawMirror();
+  }
+
+  function pickTyping(i) {
+    const r = rows[i];
+    post({ type: 'pick', text: input.value, picks: r.picks, chosen: r.text, rank: i, rows: rows.map(x => x.text) });
+    setText(r.text);
+    update(); schedulePause();
     input.focus();
   }
 
-  input.addEventListener('input', () => {
-    send('update');
+  function useSent(kind, text, rank) {
+    post({ type: 'use', kind, input: sent.input, chosen: text, rank });
+    mode = 'typing'; dismissed = true; pop.hidden = true;
+    setText(text);
+    update();
+    input.focus();
+  }
+
+  function submit() {
+    const text = input.value.trim();
+    if (!text) return;
     clearTimeout(pauseTimer);
-    pauseTimer = setTimeout(() => send('pause'), PAUSE_MS);
+    sendSeq = ++seq;
+    sent = { input: input.value, fixes: null, para: undefined };
+    mode = 'sent'; dismissed = false;
+    post({ type: 'send', seq: sendSeq, text });
+    drawPop();
+  }
+
+  function resize() {
+    input.style.height = 'auto';
+    input.style.height = input.scrollHeight + 'px';
+    sendBtn.disabled = !input.value.trim();
+  }
+
+  input.addEventListener('input', () => {
+    mode = 'typing'; dismissed = false;
+    resize(); drawMirror(); update(); schedulePause();
+  });
+  input.addEventListener('scroll', () => { mirror.scrollTop = input.scrollTop; });
+  input.addEventListener('keydown', (e) => {
+    const open = !pop.hidden && items.length;
+    if (e.key === 'Escape') { dismissed = true; pop.hidden = true; if (mode === 'sent') mode = 'typing'; return; }
+    if (open && (e.key === 'ArrowUp' || e.key === 'ArrowDown')) {
+      e.preventDefault();
+      const n = items.length;
+      setActive(e.key === 'ArrowUp' ? (active <= 0 ? n - 1 : active - 1) : (active + 1) % n);
+      return;
+    }
+    if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) {
+      e.preventDefault();
+      if (open && active >= 0) items[active].onPick(); else submit();
+    }
+  });
+  sendBtn.addEventListener('click', () => { submit(); input.focus(); });
+  document.addEventListener('mousedown', (e) => {
+    if (!e.target.closest('.composer')) { dismissed = true; pop.hidden = true; if (mode === 'sent') mode = 'typing'; }
   });
 
+  resize();
   connect();
 </script>
 </body>

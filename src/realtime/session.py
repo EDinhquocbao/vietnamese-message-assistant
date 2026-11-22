@@ -169,3 +169,44 @@ class Session:
     def text(self, accept_best: bool = False) -> str:
         """Câu hiện tại; accept_best=True: như thể người dùng nhận mọi gợi ý đầu."""
         return " ".join(match_case(w.raw, w.best) if accept_best else w.shown for w in self.words)
+
+    # ------------------------------------------------------------------ cả câu cho danh sách gợi ý
+    def sentences(self, text: str, n: int = 3) -> list[dict]:
+        """Tối đa n câu hoàn chỉnh để người dùng bấm chọn. `text` là chữ trong ô nhập lúc `sync` gần nhất.
+        Từ chưa chắc có tối đa `top` phương án, các từ khác giữ phương án đầu; xếp theo tổng độ lệch điểm so với phương án
+        đầu của từng từ. Chữ giữa các từ và từ đang gõ dở giữ nguyên như trong ô nhập."""
+        beams: list[tuple[float, list[str]]] = [(0.0, [])]
+        for w in self.words:
+            if w.chosen:
+                alts = [(w.chosen, 0.0)]
+            elif self.uncertain(w):
+                head = w.options[:self.top]
+                alts = [(c, head[0][1] - s) for c, s in head]
+            else:
+                alts = [(w.shown.lower(), 0.0)]
+            beams = sorted(((d + dd, picks + [c]) for d, picks in beams for c, dd in alts), key=lambda x: x[0])[:n * 2]
+        out, seen = [], set()
+        for _, picks in beams:
+            sent = self.render(text, picks)
+            if sent not in seen:
+                seen.add(sent)
+                out.append({"text": sent, "picks": picks})
+            if len(out) == n:
+                break
+        return out
+
+    def render(self, text: str, picks: list[str]) -> str:
+        pieces, last = [], 0
+        for w, c in zip(self.words, picks):
+            pieces += [text[last:w.start], match_case(w.raw, c)]
+            last = w.end
+        return "".join(pieces) + text[last:]
+
+    def pick(self, picks: list[str]) -> list[int]:
+        """Người dùng bấm một câu trong danh sách: chọn phương án cho từ chưa chắc hoặc khác chữ đang hiện.
+        Trả vị trí các từ đã chọn."""
+        changed = [i for i, (w, p) in enumerate(zip(self.words, picks))
+                   if not w.chosen and (p != w.shown.lower() or self.uncertain(w))]
+        for i in changed:
+            self.choose(i, picks[i])
+        return changed

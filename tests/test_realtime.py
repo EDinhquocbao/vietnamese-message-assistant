@@ -98,3 +98,33 @@ def test_refine_reorders_only_unlocked_words(lex):
     s.refine(scorer)
     assert s.words[0].options == locked_before
     assert s.words[-1].best == "qua"
+
+
+def test_sentences_are_whole_sentences_keeping_the_word_being_typed(lex):
+    s = Session(lex)
+    text = "Con yeu qua, di ho"
+    s.sync(text)
+    rows = s.sentences(text)
+    assert 1 <= len(rows) <= 3 and len({r["text"] for r in rows}) == len(rows)
+    assert all(r["text"].endswith(", đi ho") or r["text"].endswith(", di ho") for r in rows)
+    assert rows[0]["text"].startswith("Con yêu") and all(r["text"][:1] == "C" for r in rows)  # giữ chữ hoa
+    assert rows[0]["picks"] == [w.best for w in s.words]  # dòng đầu = mọi gợi ý đầu
+
+
+def test_only_uncertain_words_vary_between_sentences(lex):
+    s = Session(lex)
+    text = "nguowif ta di hoc "
+    s.sync(text)
+    rows = s.sentences(text)
+    assert all(r["text"].startswith("người ta ") for r in rows)  # Telex chắc chắn: không có phương án khác
+
+
+def test_picking_a_sentence_locks_its_words(lex):
+    s = Session(lex)
+    text = "con yeu qua "
+    s.sync(text)
+    row = s.sentences(text)[-1]
+    s.pick(row["picks"])
+    s.sync(row["text"])
+    assert s.text() + " " == row["text"]
+    assert all(w.locked for w in s.words if w.chosen) and not any(st["uncertain"] for st in s.state())

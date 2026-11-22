@@ -37,6 +37,7 @@ Trạng thái: ✅ xong · 🔄 đang làm · ⏳ chưa làm · 💤 để sau (
 | 18 | Duyệt tập kiểm thử tích hợp (41 câu `status=draft`) hoặc ghi rõ trong báo cáo là chỉ tham khảo | ✅ | Người dùng giữ cả 41 câu -> `status=approved`; kết quả tích hợp không đổi (EM 87,8%) |
 | 19 | Viết báo cáo + slide từ mục 14 file plan và các kết quả trên | ⏸️ | Chờ người dùng có mẫu báo cáo + phiếu chấm của giảng viên (định dạng, độ dài, slide quyết theo mẫu). Đã chốt nhấn mạnh cả 4: quy trình & phát hiện, cải tiến mô hình, demo & ứng dụng, hạn chế trung thực |
 | 20 | Bản thử gợi ý ngay tại từ: từ điển đề xuất ứng viên, ViT5 chọn, gợi ý sau mỗi từ (nhánh `feat/lexicon-realtime`, chưa gộp `main`) | 🧪 | Xong bản thử, xem "Vòng 7". Chế độ kết hợp không đạt điều kiện giữ; mô hình sửa cả câu vẫn là A |
+| 21 | Giao diện khung tin nhắn (demo chính): nền trắng, một khung soạn tin, danh sách gợi ý **cả câu** trồi lên khi gõ; Gửi = câu đã sửa + 1 câu diễn đạt lại | ✅ | Xem "Vòng 8"; thiết kế: `docs/superpowers/specs/2026-11-22-message-box-ui-design.md` |
 
 ## Kết quả vòng 1 (26/10/2026)
 
@@ -281,3 +282,25 @@ rồi gõ tiếp, `conf ` -> còn; từ đã chọn không đổi lại. Phát h
 
 Hạn chế: câu không dấu/gõ nhanh cần ~8 lần chạm; `cnof` (đảo chữ chồng Telex) chưa ra `còn`; chỉ gợi ý sau mỗi từ, chưa theo ký tự;
 số giả lập trên 300 câu không so trực tiếp với bảng toàn tập test; chưa có người thật gõ thử.
+
+## Vòng 8: giao diện khung tin nhắn (#21, 22/11/2026)
+
+Theo yêu cầu người dùng: nền trắng, không màu mè, chỉ một khung soạn tin + nút Gửi, không có lịch sử trò chuyện. Chạy:
+`python -m app.realtime.server` -> http://localhost:8765 (nạp cả bộ sửa lỗi lẫn diễn đạt lại qua `configs/pipeline.yaml`;
+demo Streamlit giữ nguyên làm dự phòng).
+
+| Lúc | Danh sách trồi lên phía trên khung | Bấm một dòng |
+|---|---|---|
+| Đang gõ (sau mỗi dấu cách) | Tối đa 3 **câu hoàn chỉnh** (`Session.sentences`): từ đúng giữ nguyên, từ sai đã sửa; các dòng khác nhau ở từ chưa chắc, từ khác chữ đang gõ in đậm | Cả khung đổi thành câu đó; các từ đó khóa lại (`Session.pick`) |
+| Sau khi Gửi (chữ trong khung giữ nguyên) | "Câu đã sửa": 1–3 phương án của mô hình sửa cả câu; "Diễn đạt lại ý": 1 câu (không đưa nếu còn từ nghi lỗi hoặc không ứng viên nào qua bộ lọc) | Khung đổi thành câu đó, sửa tiếp được |
+
+Từ chưa chắc gạch chân ngay trong khung. Phím: mũi tên lên/xuống + Enter để chọn, Enter để gửi, Shift+Enter xuống dòng, Esc ẩn.
+Log: `outputs/logs/realtime_history.jsonl` (`pick`, `send`, `use`).
+
+Đã kiểm tra trên trình duyệt tích hợp (máy tính và khổ điện thoại 375 px): `con yeu qua nguowif hok ` -> danh sách "con yêu quá
+người không / con yêu qua người không / con yêu quá người học"; chọn bằng bàn phím; Gửi -> câu đã sửa sau ~0,4 s, câu diễn đạt sau
+~1,4 s (lần đầu sau khi nạp mô hình chậm hơn, vài giây). 119 test đạt.
+
+Hạn chế thấy khi thử: câu diễn đạt lại vẫn hay đổi nghĩa ("mai em nghỉ học nha chị, em bị ốm rồi" -> "Em sẽ được nghỉ học nha chị và
+em bị ốm sau khi nghỉ học vào ngày mai."), đúng với kết quả chấm thủ công 35%; vài viết tắt một chữ cái vẫn đoán sai ở gợi ý đầu
+("c" -> "có" thay vì "chị", "a" -> "anh" thay vì "ạ").
