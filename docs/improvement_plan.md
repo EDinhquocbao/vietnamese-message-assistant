@@ -38,6 +38,7 @@ Trạng thái: ✅ xong · 🔄 đang làm · ⏳ chưa làm · 💤 để sau (
 | 19 | Viết báo cáo + slide từ mục 14 file plan và các kết quả trên | ⏸️ | Chờ người dùng có mẫu báo cáo + phiếu chấm của giảng viên (định dạng, độ dài, slide quyết theo mẫu). Đã chốt nhấn mạnh cả 4: quy trình & phát hiện, cải tiến mô hình, demo & ứng dụng, hạn chế trung thực |
 | 20 | Bản thử gợi ý ngay tại từ: từ điển đề xuất ứng viên, ViT5 chọn, gợi ý sau mỗi từ (nhánh `feat/lexicon-realtime`, chưa gộp `main`) | 🧪 | Xong bản thử, xem "Vòng 7". Chế độ kết hợp không đạt điều kiện giữ; mô hình sửa cả câu vẫn là A |
 | 21 | Giao diện khung tin nhắn (demo chính): nền trắng, một khung soạn tin, danh sách gợi ý **cả câu** trồi lên khi gõ; Gửi = câu đã sửa + 1 câu diễn đạt lại | ✅ | Xem "Vòng 8"; thiết kế: `docs/superpowers/specs/2026-11-22-message-box-ui-design.md` |
+| 22 | Chia đường cho nút Gửi: câu kiểu gõ nhanh/có từ lạ -> mô hình cũ, còn lại -> "chọn lại" (mong giữ được cả hai phía) | ❌ | Trên val không cách chia nào giữ được mọi kiểu lỗi -> giữ mô hình cũ; xem "Vòng 9" |
 
 ## Kết quả vòng 1 (26/10/2026)
 
@@ -313,3 +314,27 @@ mọi chỉ số độ đúng giữ nguyên như Vòng 7 (câu test gần như c
 Hạn chế thấy khi thử: câu diễn đạt lại vẫn hay đổi nghĩa ("mai em nghỉ học nha chị, em bị ốm rồi" -> "Em sẽ được nghỉ học nha chị và
 em bị ốm sau khi nghỉ học vào ngày mai."), đúng với kết quả chấm thủ công 35%; vài viết tắt một chữ cái vẫn đoán sai ở gợi ý đầu
 ("c" -> "có" thay vì "chị", "a" -> "anh" thay vì "ạ").
+
+## Vòng 9: chia đường giữa mô hình cũ và "chọn lại" (#22, 22/11/2026)
+
+Ý tưởng: "chọn lại" (D, Vòng 7) tốt hơn ở tin nhắn thật nhưng tệ hơn ở lỗi gõ, nên chọn cách sửa theo câu nhập. Chế độ `route`
+(`src/lexicon/hybrid.py`): dùng mô hình cũ khi tỉ lệ từ có dấu < τ, hoặc (tùy chọn) khi câu có từ lạ hoàn toàn (không trong từ điển,
+bảng viết tắt train hay từ điển viết tắt), còn lại dùng "chọn lại". Chỉ chọn trên val: val thật (1.847 câu như Vòng 7) và val gây lỗi
+(200 câu chuẩn ViLexNorm val × 8 kiểu lỗi, seed 7). Quy tắc đặt trước: mọi kiểu lỗi không thấp hơn luôn-dùng-mô-hình quá 1 điểm,
+rồi lấy F0.5 cao nhất. Lệnh: `python -m src.lexicon.evaluate_hybrid route` -> `outputs/metrics/route_tuning.json`.
+
+| Val (câu đúng hết) | Mô hình cũ | "Chọn lại" | Chia theo dấu (τ=0,2) | Chia theo dấu + từ lạ (τ=0,2) |
+|---|---|---|---|---|
+| F0.5 val thật | 0,788 | **0,814** | 0,813 | 0,812 |
+| Không dấu cả câu | 40,5% | 38,5% | 40,5% | 40,5% |
+| Gõ nhanh | 20,0% | 20,0% | 20,0% | 20,0% |
+| Bấm hụt chữ | **43,5%** | 33,5% | 33,5% | 34,5% |
+| Phím bên cạnh | **57,0%** | 46,5% | 46,5% | 51,5% |
+| Sai dấu | **57,0%** | 53,5% | 53,5% | 55,0% |
+
+Kết quả: **không cách chia nào đạt** -> quy tắc chọn "luôn mô hình cũ"; không đo trên test (kết quả sẽ trùng chế độ A). Nhận xét:
+- Trên val, "chọn lại" không tụt ở gõ nhanh (20,0% cả hai; trên test tụt 26,8% -> 21,2%), nên chia theo dấu chỉ sửa được câu không dấu.
+- Điểm yếu thật của "chọn lại" là lỗi gõ phím trong câu **có dấu** (bấm hụt −10, phím bên cạnh −10,5 điểm). Dấu hiệu "từ lạ" bắt được
+  một phần (phím bên cạnh −5,5) nhưng không đủ: bấm hụt thường ra chữ trông như viết tắt có trong bảng ("nh", "đc"), nên không bị coi
+  là lạ; dấu hiệu này còn làm tệ VEC (WER 6,5% -> 8,7%).
+- Hướng có thể thử sau (💤): bộ chia học từ dữ liệu (dự đoán bên nào đúng), hoặc cho từ điển sinh ứng viên tốt hơn cho lỗi gõ có dấu.

@@ -88,3 +88,31 @@ def test_guard_restores_deleted_words(lex):
 def test_prior_prefers_edits_in_dictionary(lex):
     g = HybridCorrector("rerank", lex, penalty=-8.0)
     assert g.prior("mai di hoc ko", "mai đi học không") > g.prior("mai di hoc ko", "mai xin nghỉ không")
+
+
+def test_marked_ratio():
+    from src.lexicon.hybrid import marked_ratio
+    assert marked_ratio("mai di hoc ko") == 0.0
+    assert marked_ratio("mai đi học không") == 0.75
+    assert marked_ratio("123 :))") == 1.0
+
+
+class _FakeModel:
+    def nbest(self, texts):
+        return [[{"text": "model: " + t, "prob": 1.0}] for t in texts]
+
+
+def test_route_sends_unmarked_text_to_model_and_the_rest_to_rerank(lex):
+    class Probe(HybridCorrector):
+        def _rerank(self, texts):
+            return [[{"text": "rerank: " + t, "prob": 1.0}] for t in texts]
+
+    h = Probe("route", lex, _FakeModel(), route_tau=0.5)
+    out = h(["mai di hoc ko", "mai đi học ko", "con yêu quá"])
+    assert out == ["model: mai di hoc ko", "rerank: mai đi học ko", "rerank: con yêu quá"]
+
+
+def test_route_typo_signal_sends_unknown_words_to_model(lex):
+    h = HybridCorrector("route", lex, _FakeModel(), route_tau=0.0, route_typo=True)
+    assert h.odd_word("người yêu em đẹpp") and not h.odd_word("ny em dep")  # "ny", "dep" có trong bảng viết tắt
+    assert h.to_model("người yêu em đẹpp") and not h.to_model("người yêu em đẹp")

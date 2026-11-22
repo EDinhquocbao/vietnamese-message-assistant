@@ -1,12 +1,14 @@
 """So sánh mô hình hiện tại với các cách kết hợp từ điển (xem src/lexicon/hybrid.py).
 
-    python -m src.lexicon.evaluate_hybrid tune   # chọn tham số trên VAL -> outputs/metrics/hybrid_tuning.json
-    python -m src.lexicon.evaluate_hybrid test   # 3 tập test + stress test -> outputs/metrics/hybrid_*.json/.md
+    python -m src.lexicon.evaluate_hybrid tune    # chọn tham số trên VAL -> outputs/metrics/hybrid_tuning.json
+    python -m src.lexicon.evaluate_hybrid route   # chọn ngưỡng chia đường trên VAL -> outputs/metrics/route_tuning.json
+    python -m src.lexicon.evaluate_hybrid test    # 3 tập test + stress test -> outputs/metrics/hybrid_*.json/.md
 
 Tham số dùng khi test nằm ở configs/lexicon.yaml; test không bao giờ dùng để chọn tham số.
 """
 import argparse
 import json
+import random
 import sys
 from difflib import SequenceMatcher
 from pathlib import Path
@@ -17,12 +19,14 @@ from src.correction.evaluate import evaluate
 from src.correction.predict import from_config as load_corrector, top_options
 from src.correction.stress_test import CATEGORIES, LABELS, build_inputs, score as stress_score
 from src.lexicon.candidates import SPAN, Lexicon
-from src.lexicon.hybrid import CachedModel, HybridCorrector
-from src.utils.metrics import correction_report, tokenize
+from src.lexicon.hybrid import CachedModel, HybridCorrector, marked_ratio
+from src.utils.metrics import correction_report, tokenize, wer
 from src.utils.text_utils import load_config
 
-MODES = ["model", "lexicon", "guard", "rerank"]
+MODES = ["model", "lexicon", "guard", "rerank"]  # route không đo trên test: chọn trên val ra "luôn model" (Vòng 9)
 OUT = Path("outputs/metrics")
+VAL_STRESS_SEED = 7  # khác seed 2026 của stress test trên test và seed 42 khi tạo dữ liệu train
+TAUS = (0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 1.01)  # 0.0 = luôn rerank, 1.01 = luôn model
 
 
 def log(*a):
@@ -128,7 +132,61 @@ def tune() -> None:
 def system(mode: str, cfg: dict, lex: Lexicon, model) -> HybridCorrector:
     p = cfg["params"]
     return HybridCorrector(mode, lex, model, k=p["k"], n=p["n"], alpha=p["alpha"], beta=p["beta"], penalty=p["penalty"],
-                           guard_k=p["guard_k"])
+                           guard_k=p["guard_k"], route_tau=p.get("route_tau", 0.3), route_typo=p.get("route_typo", False))
+
+
+def val_stress(n: int = 200, seed: int = VAL_STRESS_SEED) -> pd.DataFrame:
+    """Câu chuẩn ViLexNorm VAL bị gây lỗi theo 8 kiểu như stress test (seed riêng), để chọn ngưỡng mà không đụng test."""
+    df = pd.read_json("data/processed/vilexnorm/val.jsonl", lines=True)
+    pool = df.target[df.target.str.split().str.len().between(4, 25)].drop_duplicates()
+    targets = pool.sample(min(n, len(pool)), random_state=seed).tolist()
+    rng = random.Random(seed)
+    return pd.DataFrame([{"category": c, "input": fn(t, rng), "target": t} for c, fn in CATEGORIES.items() for t in targets])
+
+
+ROUTE_PREDS = Path("outputs/predictions/route_val_preds.json")
+
+
+def route_tune() -> None:
+    """Chọn cách chia đường (ngưỡng tỉ lệ dấu, có/không dùng dấu hiệu từ lạ) chỉ trên val.
+    Quy tắc (đặt trước khi chạy): mọi kiểu lỗi của val gây lỗi có tỉ lệ câu đúng không thấp hơn luôn-dùng-model quá
+    1 điểm; trong các cách đạt, lấy F0.5 cao nhất trên val thật. Không cách nào đạt -> giữ model.
+    Dự đoán của model/rerank trên val được lưu lại (ROUTE_PREDS) để thử cách chia khác không phải chạy lại mô hình."""
+    cfg = load_config("configs/lexicon.yaml")
+    lex = Lexicon.from_config(cfg)
+    real, stress = tune_sample(), val_stress()
+    log("val thật:", len(real), "câu; val gây lỗi:", len(stress), "câu")
+    saved = json.loads(ROUTE_PREDS.read_text(encoding="utf-8")) if ROUTE_PREDS.exists() else {}
+    if saved.get("real_src") != real.source.tolist() or saved.get("stress_src") != stress.input.tolist():
+        model = CachedModel(load_corrector(config=cfg["correction_config"]))
+        saved = {"real_src": real.source.tolist(), "stress_src": stress.input.tolist()}
+        for m in ("model", "rerank"):
+            sys_ = system(m, cfg, lex, model)
+            saved[m] = {"real": sys_(real.source.tolist()), "stress": sys_(stress.input.tolist())}
+            log("xong", m)
+        ROUTE_PREDS.write_text(json.dumps(saved, ensure_ascii=False), encoding="utf-8")
+    rows = []
+    for typo in (False, True):
+        for tau in TAUS:
+            router = HybridCorrector("route", lex, route_tau=tau, route_typo=typo)
+            pick = lambda srcs, part: [saved["model" if router.to_model(s) else "rerank"][part][i]  # noqa: E731
+                                       for i, s in enumerate(srcs)]
+            pr, ps = pick(real.source, "real"), pick(stress.input, "stress")
+            rep = correction_report(real.source.tolist(), pr, real.target.tolist())
+            row = {"tau": tau, "typo": typo, "f0.5": rep["f0.5"], "wer": rep["wer"],
+                   "ti_le_cau_that_ve_model": sum(router.to_model(s) for s in real.source) / len(real)}
+            for d, part in real.assign(pred=pr).groupby("dataset"):
+                row[f"wer_{d}"] = wer(part.pred.tolist(), part.target.tolist())
+            for c, part in stress.assign(pred=ps).groupby("category", sort=False):
+                row[f"em_{c}"] = float((part.pred == part.target).mean())
+            rows.append(row)
+            log({k: round(v, 4) if isinstance(v, float) else v for k, v in row.items()})
+    always_model = next(r for r in rows if r["tau"] > 1 and not r["typo"])
+    cats = [k for k in always_model if k.startswith("em_")]
+    ok = [r for r in rows if all(r[c] >= always_model[c] - 0.01 for c in cats)]
+    best = max(ok, key=lambda r: r["f0.5"])
+    (OUT / "route_tuning.json").write_text(json.dumps({"rows": rows, "best": best}, ensure_ascii=False, indent=2), encoding="utf-8")
+    print(json.dumps(best, ensure_ascii=False, indent=2))
 
 
 def table(real: dict, stress: dict, ceil: dict) -> str:
@@ -178,9 +236,9 @@ def test() -> None:
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("stage", choices=["tune", "test"])
+    ap.add_argument("stage", choices=["tune", "route", "test"])
     args = ap.parse_args()
-    {"tune": tune, "test": test}[args.stage]()
+    {"tune": tune, "route": route_tune, "test": test}[args.stage]()
 
 
 if __name__ == "__main__":
