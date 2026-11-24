@@ -185,14 +185,31 @@ class Session:
         between_digits = t[w.start - 1:w.start].isdigit() and t[w.end:w.end + 1].isdigit()  # "3.5" không phải hết câu
         return w.raw in END and not between_digits
 
+    def _break_before(self, i: int) -> bool:
+        """Có xuống dòng giữa từ i-1 và từ i (đoạn mới trong chế độ văn bản)."""
+        return i > 0 and "\n" in self.text_now[self.words[i - 1].end:self.words[i].start]
+
+    def _tail_break(self) -> int | None:
+        """Vị trí ngay sau dấu xuống dòng nằm sau từ cuối cùng (vừa Enter, chưa gõ xong từ nào), nếu có."""
+        if not self.words:
+            return None
+        k = self.text_now.find("\n", self.words[-1].end)
+        return k + 1 if k >= 0 else None
+
     def segments(self) -> list[tuple[int, int]]:
-        """Các câu trong tin nhắn dạng khoảng chỉ số từ [đầu, cuối); dấu kết thúc thuộc câu trước nó.
-        Luôn có một câu cuối (có thể rỗng: vừa gõ dấu chấm, chưa xong từ nào của câu mới)."""
+        """Các câu dạng khoảng chỉ số từ [đầu, cuối); dấu kết thúc thuộc câu trước nó. Xuống dòng cũng mở câu mới.
+        Luôn có một câu cuối (có thể rỗng: vừa gõ dấu chấm hoặc Enter, chưa xong từ nào của câu mới)."""
         out, i0 = [], 0
         for i, w in enumerate(self.words):
+            if i > i0 and self._break_before(i):
+                out.append((i0, i))
+                i0 = i
             if self._is_end(w):
                 out.append((i0, i + 1))
                 i0 = i + 1
+        if i0 < len(self.words) and self._tail_break() is not None:
+            out.append((i0, len(self.words)))
+            i0 = len(self.words)
         out.append((i0, len(self.words)))
         return out
 
@@ -203,7 +220,12 @@ class Session:
             return segs[-1]
         found = segs[0]
         for i0, i1 in segs:
-            start = self.words[i0].start if i0 < len(self.words) else (self.words[-1].end if self.words else 0)
+            if i0 < len(self.words):
+                start = self.words[i0].start
+            elif self.words and self.words[-1].raw in END:
+                start = self.words[-1].end
+            else:
+                start = self._tail_break() or 0
             if start <= caret:
                 found = (i0, i1)
         return found

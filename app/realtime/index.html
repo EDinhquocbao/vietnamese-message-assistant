@@ -6,75 +6,122 @@
 <title>Hệ thống sửa lỗi tin nhắn tiếng Việt</title>
 <style>
   * { box-sizing: border-box; }
-  html, body { margin: 0; height: 100%; background: #fff; color: #111; }
+  html, body { margin: 0; min-height: 100%; background: #fff; color: #111; }
   body { font: 17px/1.5 "Segoe UI", system-ui, sans-serif; }
-  main { max-width: 640px; min-height: 100%; margin: 0 auto; padding: 16px 16px 22vh; display: flex; flex-direction: column; justify-content: flex-end; }
 
+  /* Hai nút đổi chế độ ở góc trên bên trái */
+  .modes { position: fixed; top: 12px; left: 12px; z-index: 10; display: flex; gap: 6px; }
+  .modes button { display: grid; place-items: center; width: 38px; height: 38px; padding: 0; color: #444; background: #fff; border: 1px solid #ddd; border-radius: 10px; cursor: pointer; }
+  .modes button:hover { border-color: #999; }
+  .modes button[aria-pressed="true"] { color: #111; background: #efefef; border-color: #bbb; }
+  .modes svg { width: 20px; height: 20px; }
+
+  main { max-width: 640px; min-height: 100vh; margin: 0 auto; padding: 64px 16px 22vh; display: flex; flex-direction: column; justify-content: flex-end; }
   .composer { position: relative; }
   .box { display: flex; align-items: flex-end; gap: 8px; padding: 8px 8px 8px 16px; border: 1px solid #cfcfcf; border-radius: 22px; }
   .box:focus-within { border-color: #888; }
   .field { position: relative; flex: 1; min-width: 0; }
-  .field textarea, .field .mirror { margin: 0; padding: 4px 0; font: inherit; letter-spacing: normal; white-space: pre-wrap; overflow-wrap: break-word; word-break: normal; }
+  .field textarea, .mirror { margin: 0; padding: 4px 0; font: inherit; letter-spacing: normal; white-space: pre-wrap; overflow-wrap: break-word; word-break: normal; }
   .field textarea { position: relative; z-index: 1; display: block; width: 100%; height: 34px; max-height: 40vh; border: 0; outline: 0; resize: none; background: transparent; color: inherit; overflow-y: auto; }
-  .field .mirror { position: absolute; inset: 0; color: transparent; pointer-events: none; overflow: hidden; }
+  .mirror { position: absolute; inset: 0; color: transparent; pointer-events: none; overflow: hidden; }
   .mirror .u { text-decoration: underline wavy #c33; text-decoration-skip-ink: none; text-underline-offset: 5px; }
+  #measure { visibility: hidden; bottom: auto; }
   .send { flex: none; height: 34px; padding: 0 16px; font: inherit; font-size: 15px; color: #111; background: #fff; border: 1px solid #cfcfcf; border-radius: 17px; cursor: pointer; }
   .send:hover { border-color: #888; }
   .send:disabled { color: #aaa; cursor: default; border-color: #e5e5e5; }
 
-  .pop { position: absolute; left: 0; right: 0; bottom: calc(100% + 8px); background: #fff; border: 1px solid #d6d6d6; border-radius: 14px; box-shadow: 0 4px 16px rgba(0,0,0,.08); padding: 6px 0; max-height: 60vh; overflow-y: auto; }
+  .pop { position: absolute; z-index: 5; left: 0; right: 0; bottom: calc(100% + 8px); background: #fff; border: 1px solid #d6d6d6; border-radius: 14px; box-shadow: 0 4px 16px rgba(0,0,0,.08); padding: 6px 0; max-height: 60vh; overflow-y: auto; font: 17px/1.5 "Segoe UI", system-ui, sans-serif; }
   .pop[hidden] { display: none; }
   .label { padding: 6px 16px 2px; font-size: 13px; color: #777; }
   .row { display: block; width: 100%; padding: 8px 16px; font: inherit; text-align: left; color: #111; background: #fff; border: 0; cursor: pointer; }
   .row:hover, .row.active { background: #f2f2f2; }
   .row b { font-weight: 600; }
   .note { padding: 8px 16px; font-size: 15px; color: #888; }
-
   .hint { margin: 10px 4px 0; font-size: 13px; color: #888; }
+
+  /* Chế độ văn bản: một trang giấy để gõ nhiều đoạn như Word, không có nút Gửi */
+  body.doc main { max-width: 820px; justify-content: flex-start; padding-bottom: 48px; }
+  body.doc .box { display: block; padding: 48px 56px; border-color: #e2e2e2; border-radius: 4px; box-shadow: 0 1px 6px rgba(0,0,0,.06); }
+  body.doc .field textarea, body.doc .mirror { font: 18px/1.7 "Times New Roman", Times, serif; }
+  body.doc .field textarea { min-height: 60vh; max-height: none; overflow: hidden; }
+  body.doc .send { display: none; }
+  body.doc .pop { bottom: auto; right: auto; width: min(560px, 100%); }
+  body.doc .hint { order: -1; margin: 0 4px 10px; }
+  @media (max-width: 600px) { body.doc .box { padding: 24px 18px; } }
 </style>
 </head>
 <body>
+<nav class="modes" aria-label="Chế độ">
+  <button type="button" id="mode-chat" title="Chế độ tin nhắn" aria-label="Chế độ tin nhắn" aria-pressed="true">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 5.5A2.5 2.5 0 0 1 6.5 3h11A2.5 2.5 0 0 1 20 5.5v8a2.5 2.5 0 0 1-2.5 2.5H10l-4.5 4v-4h0A2.5 2.5 0 0 1 4 13.5z"/></svg>
+  </button>
+  <button type="button" id="mode-doc" title="Chế độ văn bản (như Word)" aria-label="Chế độ văn bản" aria-pressed="false">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/><path d="M8.5 13h7M8.5 16.5h7"/></svg>
+  </button>
+</nav>
 <main>
   <div class="composer">
-    <div class="pop" id="pop" role="listbox" aria-label="Gợi ý" hidden></div>
     <div class="box">
       <div class="field">
+        <div class="pop" id="pop" role="listbox" aria-label="Gợi ý" hidden></div>
         <div class="mirror" id="mirror" aria-hidden="true"></div>
+        <div class="mirror" id="measure" aria-hidden="true"></div>
         <textarea id="input" rows="1" autofocus spellcheck="false" placeholder="Nhập tin nhắn" aria-label="Tin nhắn"></textarea>
       </div>
       <button class="send" id="send" type="button" disabled>Gửi</button>
     </div>
   </div>
-  <p class="hint" id="hint">Gõ xong một từ thì nhấn dấu cách để nhận gợi ý; gõ . ! ? là sang câu mới (bấm vào câu cũ để sửa lại). Enter để gửi, Shift+Enter để xuống dòng, Esc để ẩn gợi ý.</p>
+  <p class="hint" id="hint"></p>
 </main>
 <script>
   const input = document.getElementById('input');
   const mirror = document.getElementById('mirror');
+  const measure = document.getElementById('measure');
   const pop = document.getElementById('pop');
   const sendBtn = document.getElementById('send');
   const hint = document.getElementById('hint');
-  const HINT = hint.textContent;
+  const btnChat = document.getElementById('mode-chat');
+  const btnDoc = document.getElementById('mode-doc');
   const PAUSE_MS = 350;
+  const HINTS = {
+    chat: 'Gõ xong một từ thì nhấn dấu cách để nhận gợi ý; gõ . ! ? là sang câu mới (bấm vào câu cũ để sửa lại). Enter để gửi, Shift+Enter để xuống dòng, Esc để ẩn gợi ý.',
+    doc: 'Chế độ văn bản: gõ như soạn thảo Word, chỉ sửa lỗi chính tả (không có Gửi, không diễn đạt lại). Xuống dòng hoặc . ! ? là sang câu mới; bấm vào câu bất kỳ để xem gợi ý cho câu đó.',
+  };
 
   let ws, seq = 0, updSeq = 0, sendSeq = 0, pauseTimer = null;
   let words = [], rows = [];               // trạng thái lúc đang gõ (từ server)
   let mode = 'typing', dismissed = false;  // 'typing' | 'sent'
+  let ui = 'chat';                         // 'chat' (tin nhắn) | 'doc' (văn bản)
   let sent = null;                         // {input, fixes: null|[], para: undefined|{text, reason}}
   let items = [], active = -1;             // các dòng đang hiện trong danh sách
 
   function post(obj) { if (ws && ws.readyState === 1) ws.send(JSON.stringify(obj)); }
   function update() { updSeq = ++seq; post({ type: 'update', seq: updSeq, text: input.value, caret: input.selectionStart }); }
+  function schedulePause() { clearTimeout(pauseTimer); pauseTimer = setTimeout(() => post({ type: 'pause', seq: updSeq }), PAUSE_MS); }
   // Con trỏ chuyển chỗ mà chữ không đổi: server gợi ý lại cho câu chứa con trỏ.
   function caretMoved() {
     if (mode !== 'typing') return;
     dismissed = false;
     updSeq = ++seq; post({ type: 'caret', seq: updSeq, caret: input.selectionStart });
   }
-  function schedulePause() { clearTimeout(pauseTimer); pauseTimer = setTimeout(() => post({ type: 'pause', seq: updSeq }), PAUSE_MS); }
+
+  function setUi(next) {
+    ui = next;
+    try { localStorage.setItem('ui', ui); } catch (e) { /* trình duyệt chặn lưu trữ: bỏ qua */ }
+    document.body.classList.toggle('doc', ui === 'doc');
+    btnChat.setAttribute('aria-pressed', String(ui === 'chat'));
+    btnDoc.setAttribute('aria-pressed', String(ui === 'doc'));
+    input.placeholder = ui === 'doc' ? 'Bắt đầu soạn văn bản...' : 'Nhập tin nhắn';
+    input.setAttribute('aria-label', ui === 'doc' ? 'Văn bản' : 'Tin nhắn');
+    hint.textContent = HINTS[ui];
+    mode = 'typing'; dismissed = false; pop.hidden = true;
+    resize(); drawMirror(); drawPop();
+    input.focus();
+  }
 
   function connect() {
     ws = new WebSocket(`ws://${location.host}/ws`);
-    ws.onopen = () => { hint.textContent = HINT; if (input.value) update(); };
+    ws.onopen = () => { hint.textContent = HINTS[ui]; if (input.value) update(); };
     ws.onclose = () => { hint.textContent = 'Mất kết nối với hệ thống, đang thử lại...'; setTimeout(connect, 1500); };
     ws.onmessage = (e) => {
       const m = JSON.parse(e.data);
@@ -129,6 +176,17 @@
     mirror.scrollTop = input.scrollTop;
   }
 
+  // Chế độ văn bản: danh sách hiện ngay dưới dòng có con trỏ (đo bằng một lớp chữ ẩn giống hệt ô nhập).
+  function placePop() {
+    if (ui !== 'doc') { pop.style.top = ''; return; }
+    const v = input.value, c = input.selectionStart;
+    measure.replaceChildren(v.slice(0, c));
+    const mark = document.createElement('span');
+    mark.textContent = '​';
+    measure.append(mark, v.slice(c) + '\n');
+    pop.style.top = (mark.offsetTop + mark.offsetHeight + 8 - input.scrollTop) + 'px';
+  }
+
   // In đậm những từ khác với chữ đang có trong ô nhập (khi hai câu cùng số từ).
   function rowContent(el, text, base) {
     const a = text.split(' '), b = base.split(' ');
@@ -144,7 +202,7 @@
   function addRow(text, onPick, base = input.value) {
     const b = document.createElement('button');
     b.type = 'button'; b.className = 'row'; b.setAttribute('role', 'option');
-    rowContent(b, text, base);
+    rowContent(b, text.replace(/\n/g, ' '), base.replace(/\n/g, ' '));
     b.addEventListener('mousedown', (e) => e.preventDefault());  // giữ con trỏ trong ô nhập
     b.addEventListener('click', onPick);
     pop.append(b);
@@ -169,6 +227,7 @@
       else if (sent.para.text) addRow(sent.para.text, () => useSent('dien_dat', sent.para.text, 0));
       else addNote('Không có cách diễn đạt đủ tốt (' + sent.para.reason + ').');
     }
+    placePop();
     pop.hidden = false;
   }
 
@@ -186,7 +245,7 @@
 
   function pickTyping(i) {
     const r = rows[i];
-    post({ type: 'pick', text: input.value, picks: r.picks, first: r.first, chosen: r.text, rank: i, rows: rows.map(x => x.text) });
+    post({ type: 'pick', ui, text: input.value, picks: r.picks, first: r.first, chosen: r.text, rank: i, rows: rows.map(x => x.text) });
     replaceRange(r.start, r.end, r.text);
     const at = r.start + r.text.length;
     input.setSelectionRange(at, at);
@@ -205,7 +264,7 @@
 
   function submit() {
     const text = input.value.trim();
-    if (!text) return;
+    if (!text || ui === 'doc') return;
     clearTimeout(pauseTimer);
     sendSeq = ++seq;
     sent = { input: input.value, fixes: null, para: undefined };
@@ -240,16 +299,20 @@
       return;
     }
     if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) {
-      e.preventDefault();
-      if (open && active >= 0) items[active].onPick(); else submit();
+      if (open && active >= 0) { e.preventDefault(); items[active].onPick(); return; }
+      if (ui === 'chat') { e.preventDefault(); submit(); }  // văn bản: Enter là xuống dòng như bình thường
     }
   });
   sendBtn.addEventListener('click', () => { submit(); input.focus(); });
+  btnChat.addEventListener('click', () => setUi('chat'));
+  btnDoc.addEventListener('click', () => setUi('doc'));
   document.addEventListener('mousedown', (e) => {
-    if (!e.target.closest('.composer')) { dismissed = true; pop.hidden = true; if (mode === 'sent') mode = 'typing'; }
+    if (!e.target.closest('.composer') && !e.target.closest('.modes')) { dismissed = true; pop.hidden = true; if (mode === 'sent') mode = 'typing'; }
   });
 
-  resize();
+  let saved = 'chat';
+  try { saved = localStorage.getItem('ui') || 'chat'; } catch (e) { /* bỏ qua */ }
+  setUi(saved === 'doc' ? 'doc' : 'chat');
   connect();
 </script>
 </body>

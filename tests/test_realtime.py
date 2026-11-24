@@ -144,6 +144,20 @@ def test_caret_in_an_earlier_sentence_shows_that_sentence(lex):
     assert s.text_now.startswith(row["text"]) and [w.raw for w in s.words[-2:]] == ["di", "hoc"]
 
 
+def test_new_line_starts_a_new_sentence(lex):
+    s = Session(lex)
+    s.sync("con yeu qua\n")  # vừa Enter, chưa gõ xong từ nào của đoạn mới -> không gợi ý
+    assert s.sentences() == []
+    assert s.sentences(caret=3) and s.sentences(caret=3)[0]["start"] == 0
+    text = "con yeu qua\ndi hoc "
+    s.sync(text)
+    assert s.segments() == [(0, 3), (3, 5)]
+    rows = s.sentences()
+    assert rows and all(r["start"] == text.index("di") and "con" not in r["text"] for r in rows)
+    rows = s.sentences(caret=2)
+    assert rows and all(r["end"] == text.index("\n") for r in rows)
+
+
 def test_decimal_point_does_not_end_a_sentence(lex):
     s = Session(lex)
     s.sync("con yeu 3.5 di ")

@@ -35,10 +35,11 @@ Trạng thái: ✅ xong · 🔄 đang làm · ⏳ chưa làm · 💤 để sau (
 | 16 | **[Ưu tiên 2]** Huấn luyện thêm 1–2 epoch mô hình diễn đạt lại (#10) rồi đo lại ViSP + tập tích hợp | ✅ | Đã thử +2 epoch: val loss TĂNG 1,09 -> 1,20, giữ mô hình cũ; xem "Vòng 5" |
 | 17 | **[Ưu tiên 3]** Đánh giá thủ công: chuẩn bị file + rubric 0/1 (giữ nghĩa, tự nhiên, không thêm/bỏ ý) cho 50–100 gợi ý; NGƯỜI DÙNG chấm (~1 giờ); tính Top-1/Top-3 chấp nhận | ✅ | Người dùng chấm 85 gợi ý: Top-1 35%, Top-3 52,5%; chấm tự động cho đạt 87% -> không tin được, xem "Vòng 6" |
 | 18 | Duyệt tập kiểm thử tích hợp (41 câu `status=draft`) hoặc ghi rõ trong báo cáo là chỉ tham khảo | ✅ | Người dùng giữ cả 41 câu -> `status=approved`; kết quả tích hợp không đổi (EM 87,8%) |
-| 19 | Viết báo cáo + slide từ mục 14 file plan và các kết quả trên | ⏸️ | Chờ người dùng có mẫu báo cáo + phiếu chấm của giảng viên (định dạng, độ dài, slide quyết theo mẫu). Đã chốt nhấn mạnh cả 4: quy trình & phát hiện, cải tiến mô hình, demo & ứng dụng, hạn chế trung thực |
+| 19 | Viết báo cáo + slide từ mục 14 file plan và các kết quả trên | ✅ (bản nháp 24/11) | Theo mẫu của GV: `reports/Bao_cao_do_an_Dinh_Quoc_Bao.docx` (47 trang, `reports/build_report.py` + `report_content.py`, cập nhật mục lục bằng `reports/update_fields.ps1`) và `reports/Slide_do_an_Dinh_Quoc_Bao.pptx` (23 slide, `uv run --no-project --with python-pptx python reports/build_slides.py`; bố cục xen kẽ ở `reports/slide_layouts.py` theo góp ý "đừng toàn thẻ cột"). Chờ người dùng đọc duyệt |
 | 20 | Bản thử gợi ý ngay tại từ: từ điển đề xuất ứng viên, ViT5 chọn, gợi ý sau mỗi từ (nhánh `feat/lexicon-realtime`, chưa gộp `main`) | 🧪 | Xong bản thử, xem "Vòng 7". Chế độ kết hợp không đạt điều kiện giữ; mô hình sửa cả câu vẫn là A |
 | 21 | Giao diện khung tin nhắn (demo chính): nền trắng, một khung soạn tin, danh sách gợi ý **cả câu** trồi lên khi gõ; Gửi = câu đã sửa + 1 câu diễn đạt lại | ✅ | Xem "Vòng 8"; thiết kế: `docs/superpowers/specs/2026-11-22-message-box-ui-design.md` |
 | 22 | Chia đường cho nút Gửi: câu kiểu gõ nhanh/có từ lạ -> mô hình cũ, còn lại -> "chọn lại" (mong giữ được cả hai phía) | ❌ | Trên val không cách chia nào giữ được mọi kiểu lỗi -> giữ mô hình cũ; xem "Vòng 9" |
+| 23 | Demo thêm **chế độ văn bản** (như Word): 2 icon đổi chế độ ở góc trên trái; gõ nhiều đoạn, gợi ý theo câu ngay dưới dòng đang gõ, chỉ sửa chính tả (không Gửi, không diễn đạt lại) | ✅ | Xem "Vòng 10"; hình `reports/figures/demo_*.png` |
 
 ## Kết quả vòng 1 (26/10/2026)
 
@@ -338,3 +339,16 @@ Kết quả: **không cách chia nào đạt** -> quy tắc chọn "luôn mô h�
   một phần (phím bên cạnh −5,5) nhưng không đủ: bấm hụt thường ra chữ trông như viết tắt có trong bảng ("nh", "đc"), nên không bị coi
   là lạ; dấu hiệu này còn làm tệ VEC (WER 6,5% -> 8,7%).
 - Hướng có thể thử sau (💤): bộ chia học từ dữ liệu (dự đoán bên nào đúng), hoặc cho từ điển sinh ứng viên tốt hơn cho lỗi gõ có dấu.
+
+## Vòng 10: chế độ văn bản cho demo (#23, 24/11/2026)
+
+Người dùng muốn cho thấy hệ thống dùng được cả trong phần mềm soạn văn bản. Trang `app/realtime` có 2 icon ở góc trên trái:
+💬 **tin nhắn** (như Vòng 8) và 📄 **văn bản** (trang giấy trắng, chữ Times New Roman, gõ nhiều đoạn như Word). Chế độ văn bản dùng
+đúng các tính năng gợi ý lúc gõ (gạch chân, danh sách cả câu, bấm vào câu bất kỳ để sửa câu đó, tự đổi Telex) nhưng không có nút
+Gửi nên chỉ sửa chính tả, không diễn đạt lại; danh sách hiện ngay dưới dòng có con trỏ; Enter là xuống dòng. Trang nhớ chế độ đã chọn.
+`Session.segments` coi **xuống dòng** là sang câu mới (như `. ! ?`). Log `pick` ghi thêm `ui` (chat/doc).
+
+Đã thử trên trình duyệt tích hợp (máy tính và khổ điện thoại 375 px): hai đoạn văn, danh sách chỉ cho đoạn đang gõ, bấm về dòng đầu
+thì hiện gợi ý dòng đầu, chọn bằng bàn phím; chế độ tin nhắn vẫn Gửi được như cũ. Hình cho báo cáo: `reports/figures/demo_tin_nhan_dang_go.png`,
+`demo_tin_nhan_sau_khi_gui.png`, `demo_van_ban.png`. Hạn chế thấy khi thử: từ đã khóa nhưng vẫn sai mà không bị gạch chân thì không
+được gợi ý ("bao cao" không thành "báo cáo"); đôi khi phương án đúng ở dòng thứ ba ("tin nhắn").
