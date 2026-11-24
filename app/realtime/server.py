@@ -121,8 +121,8 @@ class App:
                     asyncio.create_task(refine(reqs, latest))
             elif kind == "pick":  # bấm một câu trong danh sách lúc đang gõ; trang sẽ gửi "update" với câu mới ngay sau
                 session.pick(data["picks"], data["first"])
-                log_event({"event": "pick", "context": data["text"], "chosen": data["chosen"], "rank": data["rank"],
-                           "rows": data["rows"]})
+                log_event({"event": "pick", "ui": data.get("ui", "chat"), "context": data["text"], "chosen": data["chosen"],
+                           "rank": data["rank"], "rows": data["rows"]})
             elif kind == "send":
                 asyncio.create_task(submit(data["text"], data["seq"]))
             elif kind == "use":  # bấm một câu trong danh sách sau khi Gửi
