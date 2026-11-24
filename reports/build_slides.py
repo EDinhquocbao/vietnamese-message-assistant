@@ -136,7 +136,7 @@ def build() -> None:
     set_lines(shs[0].text_frame, ["TRƯỜNG ĐẠI HỌC TƯ THỤC QUỐC TẾ SÀI GÒN", "KHOA KỸ THUẬT & KHOA HỌC MÁY TÍNH"])
     set_lines(shs[1].text_frame, [TITLE.upper()])
     set_lines(shs[2].text_frame, ["Đồ án môn học: Xử lý ngôn ngữ tự nhiên  |  Lớp: 24DAI"])
-    set_lines(shs[3].text_frame, ["**Giảng viên hướng dẫn:** ThS. Trần Hàm Dương",
+    set_lines(shs[3].text_frame, ["**Giảng viên hướng dẫn:** Th.S Trần Hàm Dương",
                                   f"**Sinh viên thực hiện:** {NAME} – MSSV: 34802403236",
                                   "Tp. Hồ Chí Minh, tháng 11 năm 2026"])
 

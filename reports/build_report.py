@@ -22,6 +22,7 @@ OUT = ROOT / "reports" / "Bao_cao_do_an_Dinh_Quoc_Bao.docx"
 FONT = "Times New Roman"
 BODY_SZ = 26          # 13 pt
 TABLE_SZ = 24         # 12 pt
+HEAD_SZ = {1: 36, 2: 32, 3: 28}   # chương 18 pt, mục 1.1 16 pt, mục 1.1.1 14 pt (theo yêu cầu người dùng)
 TEXT_WIDTH = 11906 - 1701 - 1134   # twips: A4 trừ lề trái 3 cm, phải 2 cm
 NUM_HEAD, NUM_BULLET = 90, 91      # numId mới cho đề mục và gạch đầu dòng
 
@@ -88,10 +89,15 @@ def rich(text: str, sz=BODY_SZ, b=False, i=False) -> str:
     return "".join(out)
 
 
-def ppr(jc="both", before=0, after=120, line=360, keep_next=False, extra="") -> str:
+def ppr(jc="both", before=0, after=120, line=360, keep_next=False, extra="", left=0) -> str:
     return (f"<w:pPr>{extra}{'<w:keepNext/>' if keep_next else ''}"
             f'<w:spacing w:before="{before}" w:after="{after}" w:line="{line}" w:lineRule="auto"/>'
-            f'<w:ind w:left="0" w:firstLine="0"/><w:jc w:val="{jc}"/></w:pPr>')
+            f'<w:ind w:left="{left}" w:firstLine="0"/><w:jc w:val="{jc}"/></w:pPr>')
+
+
+def sign_block(lines: list[tuple[str, dict]], left: int = 4300) -> str:
+    """Khối ngày tháng + ký tên ở nửa phải trang, mọi dòng căn giữa theo dòng ngày tháng."""
+    return "".join(para(t, jc="center", left=left, **kw) for t, kw in lines)
 
 
 def para(text: str, jc="both", **kw) -> str:
@@ -110,7 +116,7 @@ def heading(level: int, text: str, numbered=True, page_break_before=None) -> str
         extra += '<w:numPr><w:ilvl w:val="0"/><w:numId w:val="0"/></w:numPr>'
     if page_break_before is False:
         extra += '<w:pageBreakBefore w:val="0"/>'
-    return f'<w:p><w:pPr>{extra}</w:pPr>{run(text, b=True, sz=28 if level == 1 else BODY_SZ)}</w:p>'
+    return f'<w:p><w:pPr>{extra}</w:pPr>{run(text, b=True, sz=HEAD_SZ[level])}</w:p>'
 
 
 def bullets(items: list[str]) -> str:
@@ -302,8 +308,8 @@ def fix_styles(xml: str) -> str:
                 f'<w:spacing w:before="60" w:after="120" w:line="360" w:lineRule="auto"/><w:ind w:left="0" w:firstLine="0"/>'
                 f'<w:jc w:val="center"/></w:pPr><w:rPr>{tnr}<w:sz w:val="{TABLE_SZ}"/><w:szCs w:val="{TABLE_SZ}"/></w:rPr></w:style>')
 
-    new = (head(1, "heading 1", 28, "center", 0, 240, True) + head(2, "heading 2", BODY_SZ, "left", 240, 120, False)
-           + head(3, "heading 3", BODY_SZ, "left", 180, 120, False) + toc(1) + toc(2) + toc(3)
+    new = (head(1, "heading 1", HEAD_SZ[1], "center", 0, 240, True) + head(2, "heading 2", HEAD_SZ[2], "left", 240, 120, False)
+           + head(3, "heading 3", HEAD_SZ[3], "left", 180, 120, False) + toc(1) + toc(2) + toc(3)
            + cap("ChuThichBang", "Chu thich bang", True) + cap("ChuThichHinh", "Chu thich hinh", False))
     # cỡ chữ mặc định 13 pt
     xml = re.sub(r'(<w:rPrDefault><w:rPr>.*?)<w:sz w:val="\d+"/>', rf'\1<w:sz w:val="{BODY_SZ}"/>', xml, count=1, flags=re.S)
@@ -318,7 +324,7 @@ def fix_numbering(xml: str) -> str:
                 f'<w:rPr><w:rFonts w:ascii="{FONT}" w:hAnsi="{FONT}" w:cs="{FONT}"/><w:b/></w:rPr></w:lvl>')
 
     head = (f'<w:abstractNum w:abstractNumId="{NUM_HEAD}"><w:multiLevelType w:val="multilevel"/>'
-            + lvl(0, "decimal", "Chương %1.", "Heading1") + lvl(1, "decimal", "%1.%2.", "Heading2")
+            + lvl(0, "decimal", "CHƯƠNG %1.", "Heading1") + lvl(1, "decimal", "%1.%2.", "Heading2")
             + lvl(2, "decimal", "%1.%2.%3.", "Heading3") + "</w:abstractNum>")
     bullet = (f'<w:abstractNum w:abstractNumId="{NUM_BULLET}"><w:multiLevelType w:val="singleLevel"/>'
               f'<w:lvl w:ilvl="0"><w:start w:val="1"/><w:numFmt w:val="bullet"/><w:lvlText w:val="&#8226;"/>'
@@ -332,18 +338,36 @@ def fix_numbering(xml: str) -> str:
 
 
 # ============================================================== ghép tài liệu
-def cover(xml_body_cover: str, info: dict) -> str:
+def _para_at(xml: str, needle: str) -> tuple[int, int]:
+    """Vị trí [đầu, cuối) của đoạn <w:p> chứa `needle`."""
+    i = xml.index(needle)
+    start = max(xml.rfind("<w:p ", 0, i), xml.rfind("<w:p>", 0, i))
+    return start, xml.index("</w:p>", i) + len("</w:p>")
+
+
+def cover(x: str, info: dict) -> str:
     rep = {
+        "MÔN ĐỒ ÁN CƠ SỞ": f"MÔN {info['course'].upper()}",
         "PHÂN TÍCH TRỰC QUAN HÓA DỮ LIỆU VỀ WORLD CUP SỬ DỤNG PYTHON": info["title"].upper(),
         "SINH VIÊN: NGUYEN VAN A - MSSV": f"SINH VIÊN: {info['name'].upper()}",
-        ">LỚP:<": f">MSSV: {info['mssv']} - LỚP: {info['class']}<",   # giữ đúng số dòng để bìa không tràn trang
         "GIẢNG VIÊN:                 ": f"GIẢNG VIÊN: {info['teacher'].upper()}",
     }
     for a, b in rep.items():
-        if a not in xml_body_cover:
+        if a not in x:
             sys.exit(f"Không thấy chữ '{a}' ở trang bìa mẫu")
-        xml_body_cover = xml_body_cover.replace(a, escape(b) if not a.startswith(">") else b)
-    return xml_body_cover
+        x = x.replace(a, escape(b))
+    # MSSV và lớp mỗi thứ một dòng: đoạn "LỚP:" nhân đôi
+    s, e = _para_at(x, ">LỚP:<")
+    p = x[s:e]
+    x = x[:s] + p.replace(">LỚP:<", f">MSSV: {info['mssv']}<") + p.replace(">LỚP:<", f">LỚP: {info['class']}<") + x[e:]
+    # thêm một dòng thì bớt một đoạn trống ngay sau khối sinh viên để bìa vẫn vừa một trang
+    _, e = _para_at(x, "GIẢNG VIÊN:")
+    ns = x.index("<w:p", e)
+    ne = x.index("</w:p>", ns) + len("</w:p>")
+    if "<w:t" not in x[ns:ne]:
+        x = x[:ns] + x[ne:]
+    # khối sinh viên dời sang trái khoảng 1 cm (điểm dừng tab 6,5 cm -> 5,5 cm)
+    return x.replace('w:pos="3686"', 'w:pos="3119"')
 
 
 def rubric(info: dict) -> str:
@@ -351,11 +375,34 @@ def rubric(info: dict) -> str:
     x = zipfile.ZipFile(find_file("Phiếu chấm")).read("word/document.xml").decode("utf-8")
     body = x[x.index("<w:body>") + len("<w:body>"):x.rindex("<w:sectPr")]
     fill = [(">:<", f">: {info['name']}<"), (">Mã số Sinh viên:<", f">Mã số Sinh viên: {info['mssv']}<"),
-            (">Lớp:<", f">Lớp: {info['class']}<"), (">Tên Đồ án/Tiểu luận:<", f">Tên Đồ án/Tiểu luận: {escape(info['title'])}<")]
+            (">Lớp:<", f">Lớp: {info['class']}<"),
+            (">Tên Đồ án/Tiểu luận:<", f">Tên Đồ án: {escape(info['title'])}<")]   # chọn một: đây là đồ án
     for a, b in fill:
         if a not in body:
             sys.exit(f"Phiếu chấm: không thấy '{a}'")
         body = body.replace(a, b, 1)
+    # giãn phiếu cho thoáng (mẫu dồn hết lên nửa trên), vẫn chừa chỗ cuối trang cho giảng viên ký
+    body = re.sub(r'<w:trHeight w:val="\d+"/>', '<w:trHeight w:val="720"/>', body)
+    # bỏ các đoạn trống ở cuối phiếu: khi bảng giãn ra chúng tràn sang một trang trắng; phần trắng còn lại của trang
+    # dưới chữ "Giảng viên" đã đủ chỗ ký
+    while True:
+        s = max(body.rfind("<w:p "), body.rfind("<w:p>"))
+        tail = body[s:]
+        if s < 0 or re.search(r"<w:t[ >]", tail) or "<w:tbl" in tail or not tail.rstrip().endswith("</w:p>"):
+            break
+        body = body[:s]
+    for label in (">inh viên<", ">Mã số Sinh viên", ">Lớp:", ">Tên Đồ án", ">Điểm chữ"):
+        s, e = _para_at(body, label)
+        p = re.sub(r"<w:spacing\b[^>]*/>", "", body[s:e])
+        sp = '<w:spacing w:before="60" w:after="60" w:line="360" w:lineRule="auto"/>'
+        if "<w:pPr>" in p:   # đúng thứ tự trong pPr: spacing đứng trước ind / jc / rPr
+            ppr_s, ppr_e = p.index("<w:pPr>"), p.index("</w:pPr>")
+            cut = min([k for k in (p.find(t, ppr_s, ppr_e) for t in ("<w:ind", "<w:contextualSpacing", "<w:jc", "<w:rPr>"))
+                       if k >= 0] or [ppr_e])
+            p = p[:cut] + sp + p[cut:]
+        else:
+            p = re.sub(r"(<w:p\b[^>]*>)", r"\1<w:pPr>" + sp + "</w:pPr>", p, count=1)
+        body = body[:s] + p + body[e:]
     return body
 
 

@@ -6,14 +6,15 @@ bảng / hình / công thức (điền sau khi đánh số). Mọi số liệu l
 import re
 
 from build_report import (bullets, caption, equation, field, figure, frac, hat, heading, lim_low, mr, mt, nary, page_break,
-                          para, paren, sqrt, sub, sup, table)
+                          para, paren, sign_block, sqrt, sub, sup, table)
 
 INFO = {
     "title": "Hệ thống sửa lỗi chính tả và gợi ý diễn đạt cho tin nhắn tiếng Việt",
     "name": "Đinh Quốc Bảo",
     "mssv": "34802403236",
     "class": "24DAI",
-    "teacher": "ThS. Trần Hàm Dương",
+    "teacher": "Th.S Trần Hàm Dương",
+    "course": "Xử lý ngôn ngữ tự nhiên",
 }
 
 REFERENCES = {
@@ -68,20 +69,32 @@ def H1(text):
     _parts.append(heading(1, text))
 
 
+_last_h2 = False   # phần vừa thêm có phải tiêu đề mục 1.1 không
+
+
 def H2(text):
+    global _last_h2
     _parts.append(heading(2, text))
+    _last_h2 = text
 
 
 def H3(text):
+    global _last_h2
+    if _last_h2:   # người dùng muốn mỗi mục 1.1 có đoạn giới thiệu trước khi xuống 1.1.1
+        raise SystemExit(f"Mục '{_last_h2}' cần một đoạn giới thiệu trước mục con '{text}'")
     _parts.append(heading(3, text))
 
 
 def P(text, **kw):
+    global _last_h2
     _parts.append(para(text, **kw))
+    _last_h2 = False
 
 
 def B(items):
+    global _last_h2
     _parts.append(bullets(items))
+    _last_h2 = False
 
 
 def _label(kind, key):
@@ -93,18 +106,24 @@ def _label(kind, key):
 
 
 def T(key, title, header, rows, widths, align=None):
+    global _last_h2
+    _last_h2 = False
     num = _label("T", key)
     _parts.append(caption("bang", f"Bảng {num}. {title}"))
     _parts.append(table(header, rows, widths, align))
 
 
 def F(key, path, title, width_cm=15.0):
+    global _last_h2
+    _last_h2 = False
     num = _label("F", key)
     _parts.append(figure(path, width_cm))
     _parts.append(caption("hinh", f"Hình {num}. {title}"))
 
 
 def E(key, omml):
+    global _last_h2
+    _last_h2 = False
     num = _label("E", key)
     _parts.append(equation(omml, num))
 
@@ -124,31 +143,54 @@ def _flush() -> str:
 
 # ============================================================== phần đầu
 def front_matter(rubric_xml: str) -> str:
+    teacher, title = INFO["teacher"], INFO["title"]
+    # khối ký tên: ở nửa phải trang, các dòng căn giữa theo dòng ngày tháng; tên tự ký tay khi in
+    sign = sign_block([("Tp. Hồ Chí Minh, ngày …… tháng …… năm 2026", {"i": True, "before": 240, "after": 0}),
+                       ("Sinh viên", {"b": True, "after": 0}),
+                       ("(Ký và ghi rõ họ tên)", {"i": True, "after": 0})], left=3400)
+
     out = [heading(1, "LỜI CAM ĐOAN", numbered=False, page_break_before=False)]
-    out.append(para("Em xin cam đoan đồ án “Hệ thống sửa lỗi chính tả và gợi ý diễn đạt cho tin nhắn tiếng Việt” là kết quả "
-                    "thực hiện của cá nhân em dưới sự hướng dẫn của ThS. Trần Hàm Dương. Các số liệu và kết quả trình bày "
-                    "trong báo cáo được em đo trực tiếp từ mã nguồn của đồ án; các bộ dữ liệu, mô hình và tài liệu của tác giả "
-                    "khác đều được ghi rõ nguồn và trích dẫn theo đúng quy định. Trong quá trình thực hiện, em có sử dụng công cụ "
-                    "lập trình AI (Claude Code) để hỗ trợ viết mã, chạy thử nghiệm và soạn thảo; mọi quyết định về phương pháp, "
-                    "dữ liệu và việc chấm đánh giá thủ công do em thực hiện và chịu trách nhiệm."))
-    out.append(para("Em xin chịu hoàn toàn trách nhiệm về lời cam đoan này."))
-    out.append(para("Tp. Hồ Chí Minh, ngày …… tháng …… năm 2026", jc="right", before=240, after=0))
-    out.append(para("Sinh viên", jc="right", b=True, after=0))
-    out.append(para("(Ký và ghi rõ họ tên)", jc="right", i=True, after=1200))
-    out.append(para("Đinh Quốc Bảo", jc="right", b=True))
+    for text in [
+        f"Em xin cam đoan đồ án “{title}” là công trình do cá nhân em thực hiện trong khuôn khổ môn Xử lý ngôn ngữ tự "
+        f"nhiên, dưới sự hướng dẫn của {teacher}. Nội dung báo cáo phản ánh đúng quá trình em tìm hiểu, phân tích, thiết "
+        "kế, xây dựng và đánh giá hệ thống.",
+        "Các số liệu, bảng biểu và kết quả thực nghiệm trong báo cáo được em đo trực tiếp từ mã nguồn của đồ án, trên các "
+        "bộ dữ liệu đã nêu rõ nguồn gốc. Em không chỉnh sửa hay chọn lọc kết quả theo ý muốn; những thử nghiệm không đạt "
+        "kỳ vọng cũng được giữ lại và trình bày trung thực trong báo cáo.",
+        "Các bộ dữ liệu, mô hình huấn luyện sẵn, thư viện và tài liệu của những tác giả khác được sử dụng trong đồ án đều "
+        "được ghi rõ nguồn và trích dẫn theo quy định, đồng thời tuân thủ giấy phép sử dụng của từng nguồn. Đồ án không sao "
+        "chép trái phép công trình của người khác.",
+        "Trong quá trình thực hiện, em có sử dụng công cụ AI và các công cụ tự động hóa để hỗ trợ lập trình, chạy thử "
+        "nghiệm và soạn thảo tài liệu. Mọi quyết định về phương pháp, dữ liệu, cách đánh giá và việc chấm đánh giá thủ công "
+        "đều do em thực hiện, kiểm tra lại và chịu trách nhiệm.",
+        "Mã nguồn, cấu hình và các kết quả trung gian của đồ án được lưu trữ đầy đủ trên kho mã của dự án, có thể tái lập "
+        "lại các thí nghiệm theo hướng dẫn ở phần phụ lục. Những nhận định và đánh giá trong báo cáo là quan điểm của cá "
+        "nhân em, dựa trên kết quả thực nghiệm đã trình bày.",
+        "Báo cáo này chưa từng được nộp cho bất kỳ môn học hay chương trình đào tạo nào khác. Nếu có bất kỳ sai phạm nào, "
+        "em xin hoàn toàn chịu trách nhiệm trước nhà trường và giảng viên hướng dẫn."]:
+        out.append(para(text, after=160))
+    out.append(sign)
 
     out.append(heading(1, "LỜI CẢM ƠN", numbered=False))
-    out.append(para("Em xin chân thành cảm ơn ThS. Trần Hàm Dương đã hướng dẫn, góp ý và tạo điều kiện để em thực hiện đồ án "
-                    "này. Em cũng xin cảm ơn quý thầy cô Khoa Kỹ thuật & Khoa học Máy tính, Trường Đại học Tư thục Quốc tế "
-                    "Sài Gòn đã truyền đạt những kiến thức nền tảng về lập trình, học máy và xử lý ngôn ngữ tự nhiên."))
-    out.append(para("Em gửi lời cảm ơn đến các nhóm tác giả đã công bố công khai các bộ dữ liệu VSEC, ViLexNorm, ViSP, VEC, "
-                    "từ điển từ viết tắt tiếng Việt và mô hình ViT5. Nếu không có những tài nguyên này, đồ án khó có thể "
-                    "thực hiện trong phạm vi một học kỳ."))
-    out.append(para("Do thời gian và kinh nghiệm còn hạn chế, báo cáo không tránh khỏi thiếu sót. Em rất mong nhận được ý kiến "
-                    "đóng góp của quý thầy cô để hoàn thiện hơn."))
-    out.append(para("Tp. Hồ Chí Minh, ngày …… tháng …… năm 2026", jc="right", before=240, after=0))
-    out.append(para("Sinh viên", jc="right", b=True, after=1200))
-    out.append(para("Đinh Quốc Bảo", jc="right", b=True))
+    for text in [
+        f"Lời đầu tiên, em xin gửi lời cảm ơn chân thành đến {teacher}, người đã trực tiếp giảng dạy môn Xử lý ngôn ngữ tự "
+        "nhiên và hướng dẫn em trong suốt quá trình thực hiện đồ án. Những góp ý của thầy về cách đặt vấn đề, cách đánh "
+        "giá kết quả và cách trình bày đã giúp em định hướng đúng và hoàn thiện đồ án.",
+        "Em xin cảm ơn quý thầy cô Khoa Kỹ thuật & Khoa học Máy tính, Trường Đại học Tư thục Quốc tế Sài Gòn đã truyền đạt "
+        "cho em những kiến thức nền tảng về lập trình, cấu trúc dữ liệu, học máy và xử lý ngôn ngữ tự nhiên. Đây là hành "
+        "trang quan trọng để em có thể tự tìm hiểu và giải quyết một bài toán thực tế.",
+        "Em cũng xin gửi lời cảm ơn đến các nhóm tác giả đã công bố công khai các bộ dữ liệu VSEC, ViLexNorm, ViSP, VEC, từ "
+        "điển từ viết tắt tiếng Việt và mô hình ngôn ngữ ViT5. Nhờ những tài nguyên mở này, em có thể thực hiện đồ án "
+        "trong phạm vi một học kỳ với điều kiện phần cứng của một máy tính cá nhân.",
+        "Trong quá trình thực hiện, em đã học được nhiều điều, không chỉ về kiến thức chuyên môn như cách tinh chỉnh mô hình "
+        "Transformer, cách xây dựng tập dữ liệu không rò rỉ hay cách đánh giá một hệ thống xử lý ngôn ngữ, mà còn về tinh "
+        "thần làm việc nghiêm túc, trung thực với kết quả và kiên nhẫn khi gặp lỗi. Đây là những bài học quý giá cho quá "
+        "trình học tập và làm việc sau này của em.",
+        "Cuối cùng, em xin cảm ơn gia đình và bạn bè đã luôn động viên, hỗ trợ em trong quá trình học tập và thực hiện đồ án.",
+        "Do thời gian và kinh nghiệm còn hạn chế, báo cáo khó tránh khỏi những thiếu sót. Em rất mong nhận được ý kiến đóng "
+        "góp của quý thầy cô để em hoàn thiện hơn trong những đồ án tiếp theo. Em xin chân thành cảm ơn!"]:
+        out.append(para(text, after=160))
+    out.append(sign)
 
     out.append(page_break())
     out.append(rubric_xml)
@@ -198,7 +240,7 @@ def chapter1():
       "hàng. Đồ án xây dựng **hệ thống sửa lỗi tin nhắn tiếng Việt**: sửa lỗi chính tả, gợi ý từ đúng ngay trong lúc gõ và "
       "đề xuất cách diễn đạt khác cho câu đã sửa, với yêu cầu xuyên suốt là **không làm thay đổi ý của người viết**.")
 
-    H2("Lý do chọn đồ án/Tính cấp thiết của đồ án")
+    H2("Lý do chọn đồ án")
     P("Tiếng Việt dùng chữ Latinh có dấu: mỗi âm tiết mang một trong sáu thanh và nhiều nguyên âm có dấu phụ (ă, â, ê, ô, ơ, "
       "ư) cùng chữ đ. Chỉ cần bỏ dấu, một chuỗi như *con yeu qua* có thể là “con yêu quá”, “còn yêu quá” hay “con yếu quá”. "
       "Bàn phím điện thoại có sửa lỗi tự động nhưng chủ yếu dựa vào từ điển từng từ, nên khó xử lý câu bỏ dấu hoàn toàn và "
@@ -301,6 +343,9 @@ def chapter2():
       "để hiện thực.")
 
     H2("Cơ sở lý thuyết về bài toán")
+    P("Mục này trình bày ba nội dung nền tảng của đề tài: bản chất của bài toán sửa lỗi chính tả và chuẩn hóa văn bản; "
+      "những đặc điểm riêng của chữ viết tiếng Việt và văn bản tin nhắn khiến bài toán trở nên khó; và bài toán diễn đạt "
+      "lại câu cùng những khó khăn khi đánh giá kết quả.")
     H3("Bài toán sửa lỗi chính tả và chuẩn hóa văn bản")
     P("Cho câu đầu vào *x* có thể chứa lỗi, bài toán sửa lỗi tìm câu *y* đúng chính tả mà người viết muốn gõ. Khi lỗi chỉ là "
       "sai chính tả, đây là bài toán sửa lỗi chính tả; khi đầu vào là văn bản mạng xã hội với viết tắt và teencode, bài toán "
@@ -328,7 +373,10 @@ def chapter2():
       "nghĩa, vừa đủ khác, vừa tự nhiên. Việc đánh giá tự động rất khó: chỉ số so khớp từ như BLEU [@bleu] thưởng cho việc "
       "chép lại câu gốc, nên cần thêm chỉ số phạt chép lại như iBLEU [@ibleu] và đánh giá thủ công.")
 
-    H2("Các phương pháp, mô hình hoặc giải pháp liên quan")
+    H2("Các phương pháp và mô hình liên quan")
+    P("Mục này giới thiệu các phương pháp và mô hình được dùng trong hệ thống, đi từ cách tiếp cận cổ điển dựa trên từ "
+      "điển và mô hình kênh nhiễu đến kiến trúc Transformer, mô hình ViT5, các thuật toán giải mã và cách đo độ giống nghĩa "
+      "giữa hai câu. Cuối mục là phần so sánh các hướng tiếp cận và lý do lựa chọn của đồ án.")
     H3("Mô hình kênh nhiễu và từ điển")
     P("Theo mô hình kênh nhiễu [@kernighan; @brill], với từ gõ *t*, từ đúng được chọn là ứng viên *c* trong tập ứng viên "
       "*C(t)* có tích xác suất kênh P(t|c) (khả năng gõ ra *t* khi muốn gõ *c*) và xác suất ngôn ngữ P(c) lớn nhất:")
@@ -409,8 +457,8 @@ def chapter2():
     P("Đồ án được phát triển trên máy tính xách tay chạy Windows 11 (cấu hình ở Bảng «T:phan-cung», Chương 4). Mã nguồn được quản "
       "lý bằng Git 2.54 và lưu trên GitHub (kho *vietnamese-message-assistant*), làm việc theo nhánh tính năng rồi gộp vào "
       "nhánh chính. Phân tích dữ liệu và vẽ hình dùng Jupyter Notebook; mô hình chạy trong môi trường ảo Python (*venv*). "
-      "Giao diện được kiểm thử trên trình duyệt ở cả khổ máy tính và khổ điện thoại. Công cụ lập trình AI Claude Code được "
-      "dùng để hỗ trợ viết mã, chạy thí nghiệm và soạn tài liệu.")
+      "Giao diện được kiểm thử trên trình duyệt ở cả khổ máy tính và khổ điện thoại. Công cụ AI và các công cụ tự động hóa được "
+      "dùng để hỗ trợ lập trình, chạy thí nghiệm và soạn tài liệu.")
 
     H2("Tổng kết chương")
     P("Chương 2 đã trình bày nền tảng của hệ thống: mô hình kênh nhiễu và từ điển cho tầng gợi ý nhanh, kiến trúc "
@@ -429,6 +477,9 @@ def chapter3():
       "gạch chân và đưa danh sách lựa chọn.")
 
     H2("Xác định yêu cầu hệ thống")
+    P("Từ phân tích ở mục 3.1, yêu cầu của hệ thống được chia thành ba nhóm: yêu cầu chức năng (hệ thống phải làm được "
+      "gì), yêu cầu phi chức năng (tốc độ, tài nguyên, độ tin cậy, khả năng sử dụng) và yêu cầu về dữ liệu, bảo mật, hiệu "
+      "năng. Mỗi yêu cầu đều có cách kiểm tra tương ứng ở Chương 4.")
     H3("Yêu cầu chức năng")
     T("yc-chuc-nang", "Yêu cầu chức năng",
       ["Mã", "Chức năng", "Mô tả"],
@@ -539,6 +590,9 @@ def chapter3():
       "0,13 điểm phần trăm và không cải thiện F0.5 trên tập validation.")
 
     H2("Thiết kế giao diện người dùng")
+    P("Giao diện được thiết kế theo nguyên tắc tối giản: người dùng chỉ thấy khung soạn thảo và danh sách gợi ý khi cần, "
+      "không có nút bấm hay bảng điều khiển thừa. Mục này mô tả cấu trúc giao diện, hai chế độ sử dụng (tin nhắn và văn bản) "
+      "và quy trình tương tác của người dùng.")
     H3("Sơ đồ điều hướng và cấu trúc giao diện")
     P("Ứng dụng là một trang duy nhất, nền trắng, không có lịch sử trò chuyện. Góc trên bên trái có hai biểu tượng để chuyển "
       "giữa **chế độ tin nhắn** và **chế độ văn bản**; trang ghi nhớ chế độ đã chọn. Mỗi chế độ chỉ có một khung soạn thảo và "
@@ -590,6 +644,9 @@ def chapter4():
       [2.6, 3, 0.8, 1.2, 1.1], ["left", "left", "center", "center", "center"])
 
     H2("Hiện thực hóa hệ thống")
+    P("Mục này mô tả cách hiện thực từng thành phần theo thiết kế ở Chương 3, theo đúng thứ tự xây dựng: xử lý dữ liệu, "
+      "huấn luyện mô hình sửa lỗi, mô hình diễn đạt lại, từ điển và gợi ý khi gõ, cuối cùng là ứng dụng demo. Mã nguồn tương "
+      "ứng của từng phần được nêu kèm để có thể đối chiếu và tái lập.")
     H3("Tiền xử lý và chia dữ liệu")
     P("Bước làm sạch chỉ chuẩn hóa Unicode NFC và gộp khoảng trắng, **không** hạ chữ thường hay bỏ dấu vì lỗi dấu chính là "
       "thứ cần sửa. Hai phát hiện quan trọng khi khảo sát dữ liệu đã thay đổi cách làm:")
@@ -644,6 +701,9 @@ def chapter4():
       "thêm quan hệ nguyên nhân không có trong câu gốc. Hạn chế này được định lượng ở mục 4.4.3.")
 
     H2("Kiểm thử hệ thống")
+    P("Việc kiểm thử nhằm trả lời hai câu hỏi: hệ thống có hoạt động đúng như các yêu cầu ở Chương 3 không, và chất "
+      "lượng sửa lỗi, diễn đạt lại đạt mức nào so với các mốc so sánh. Mục này trình bày phương pháp kiểm thử, các trường "
+      "hợp kiểm thử, kết quả và các lỗi đã gặp cùng cách xử lý.")
     H3("Phương pháp và kế hoạch kiểm thử")
     P("Kiểm thử được tổ chức theo năm mức: (1) **kiểm thử đơn vị** tự động bằng pytest (127 bài, chạy dưới 10 giây) cho chỉ "
       "số đánh giá, chia tập, chống rò rỉ, sinh lỗi, giải mã Telex, từ điển và phiên gợi ý; (2) **đánh giá ngoại tuyến** trên "
