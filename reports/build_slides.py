@@ -2,7 +2,8 @@
 
 Chạy từ thư mục gốc repo (python-pptx không có trong .venv):
     uv run --no-project --with python-pptx python reports/build_slides.py
-Giữ nguyên bố cục, màu và phông của mẫu (Cambria/Calibri); chỉ thay chữ, bảng, biểu đồ và chèn hình.
+Giữ màu và phông của mẫu (Cambria/Calibri). Phần lớn trang chỉ thay chữ, bảng, biểu đồ và chèn hình; 3 trang thẻ cột được
+dựng lại dạng dòng và có thêm 4 trang có hình (xem reports/slide_layouts.py) để bố cục không lặp lại.
 """
 import copy
 import re
@@ -16,6 +17,8 @@ from pptx import Presentation
 from pptx.chart.data import CategoryChartData
 from pptx.oxml.ns import qn
 from pptx.util import Emu, Inches
+
+import slide_layouts as L
 
 ROOT = Path(__file__).resolve().parents[1]
 OUT = ROOT / "reports" / "Slide_do_an_Dinh_Quoc_Bao.pptx"
@@ -122,7 +125,8 @@ def table(slide, name: str, rows: list[list[str]]) -> None:
 
 def build() -> None:
     prs = Presentation(str(template()))
-    s = prs.slides
+    icons = L.load_icons(Presentation(str(template())))
+    s = list(prs.slides)
 
     # chân trang của layout nội dung
     for layout in prs.slide_layouts:
@@ -160,26 +164,14 @@ def build() -> None:
     text(sl, "Text 15", "Câu đã sửa (tối đa 3 phương án) + 1 câu diễn đạt lại; gợi ý cả câu ngay khi gõ")
     text(sl, "Text 16", "Loại bài toán: sinh văn bản seq2seq (sửa lỗi chính tả, chuẩn hóa, diễn đạt lại)")
 
-    # 5. Mục tiêu và phạm vi
-    sl = s[4]
-    text(sl, "Text 4", "Sửa lỗi tin nhắn, so với mốc và mô hình có sẵn", "Gợi ý cả câu ngay khi gõ, dưới 500 ms",
-         "Diễn đạt lại giữ nghĩa, đo cả tự động và thủ công")
-    text(sl, "Text 8", "Tiếng Việt, tin nhắn ngắn, một lượt", "Chạy cục bộ trên GPU 6 GB",
-         "Không: hội thoại nhiều lượt, huấn luyện từ đầu")
-    text(sl, "Text 12", "Tinh chỉnh ViT5, lỗi nhân tạo, huấn luyện 2 giai đoạn", "Từ điển đề xuất, mô hình chọn",
-         "Chống rò rỉ dữ liệu, điều kiện đặt trước")
+    # 5. Mục tiêu và phạm vi: 3 hàng ngang thay cho 3 thẻ cột
+    L.goals(s[4], icons)
 
     # 6. Section 02
     section_subtitle(s[5], "Kênh nhiễu, Transformer, ViT5 và công cụ sử dụng")
 
-    # 7. Kỹ thuật và công cụ
-    sl = s[6]
-    text(sl, "Text 4", "NFC, giữ chữ hoa và dấu; chia tập theo nhóm, bỏ câu trùng giữa các tập")
-    text(sl, "Text 8", "Tokenizer SentencePiece của ViT5; nhúng câu MiniLM đa ngôn ngữ")
-    text(sl, "Text 12", "ViT5-base (226M) sửa lỗi và diễn đạt; NLI mDeBERTa-v3; từ điển + bigram")
-    text(sl, "Text 16", "Python 3.14, PyTorch 2.14, Transformers 5.20, sentence-transformers, websockets")
-    text(sl, "Text 20", "CER, WER, câu đúng hết, P/R/F0.5, sửa quá tay; BLEU, iBLEU; chấm thủ công")
-    text(sl, "Text 24", "Laptop RTX 3050 6 GB, Core i5-12450HX, RAM 16 GB, Windows 11")
+    # 7. Kỹ thuật và công cụ: danh sách dòng có icon, chia 2 cột
+    L.tools(s[6], icons)
 
     # 8. Section 03
     section_subtitle(s[7], "4 bộ dữ liệu, luồng xử lý và kiến trúc hệ thống")
@@ -266,14 +258,8 @@ def build() -> None:
     text(sl, "Text 11", "**Nhãn đúng:** tuần hoàn   **Dự đoán:** kiệt quệ")
     text(sl, "Text 12", "**Nguyên nhân:** sửa thành từ có thật, đổi nghĩa")
 
-    # 16. Section 05 giữ nguyên chữ của mẫu; 17. Kết luận
-    sl = s[16]
-    text(sl, "Text 4", "WER tin nhắn 16,9% → 3,74%; 68,4% câu đúng hết", "Gợi ý khi gõ: đáp án trong top-3 ở 96,6% từ sai, < 150 ms",
-         "Demo 2 chế độ, chạy cục bộ")
-    text(sl, "Text 8", "Diễn đạt lại: chỉ 35% gợi ý đầu đạt", "Câu bỏ hết dấu cần ~8 lần chạm",
-         "Một người chấm; dữ liệu MXH chưa giống tin nhắn riêng")
-    text(sl, "Text 12", "Dữ liệu diễn đạt theo văn phong tin nhắn", "Gợi ý theo ký tự, học thói quen người dùng",
-         "Mô hình nhẹ hơn, đóng gói thành bàn phím")
+    # 16. Section 05 giữ nguyên chữ của mẫu; 17. Kết luận: khối đậm bên trái, 2 khối xếp chồng bên phải
+    L.conclusion(s[16], icons)
 
     # 18. Tài liệu tham khảo (trích các tài liệu chính, đầy đủ trong báo cáo)
     text(s[17], "Text 2",
@@ -287,6 +273,17 @@ def build() -> None:
     # 19. Kết thúc
     shs = [sh for sh in s[18].shapes if sh.has_text_frame]
     set_lines(shs[1].text_frame, [f"Hỏi & Đáp  ·  {NAME}  ·  MSSV 34802403236"])
+
+    # Trang mới có hình, rồi sắp lại thứ tự: không trang nào liền nhau cùng một kiểu bố cục
+    typing = L.new_slide(prs, "Gợi ý cả câu ngay khi gõ", s[10])
+    L.typing(typing, icons)
+    highlights = L.new_slide(prs, "Kết quả nổi bật", s[10])
+    L.highlights(highlights, icons)
+    evaluation = L.new_slide(prs, "Phát hiện về cách đánh giá", s[10])
+    L.evaluation(evaluation, icons)
+    docmode = L.new_slide(prs, "Chế độ văn bản: dùng được khi soạn thảo", s[10])
+    L.document_mode(docmode, icons)
+    L.reorder(prs, s[:11] + [typing, s[11], highlights, s[12], s[13], evaluation, s[14], docmode] + s[15:])
 
     lock = OUT.with_name("~$" + OUT.name)
     if lock.exists():
